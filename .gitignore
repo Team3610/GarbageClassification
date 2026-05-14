@@ -1,5 +1,8 @@
 # Dataset
-Dataset/
+Dataset/*
+
+# Dataset 폴더 내 README.md 파일 예외 처리
+!Dataset/README.md
 
 # Models
 Model/
