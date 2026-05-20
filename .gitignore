@@ -6,6 +6,7 @@ Dataset/*
 
 # Models
 Model/
+AI/train/runs/
 
 # IDE
 .idea/
