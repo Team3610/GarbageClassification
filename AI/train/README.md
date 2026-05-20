@@ -112,6 +112,7 @@ print(label, path)
 
 `train_stage2.py`는 10개 쓰레기 클래스를 분류하는 경량 전이학습 스크립트입니다.
 기본 모델은 모바일/브라우저 추론을 고려해 `MobileNetV3-Small`을 사용합니다.
+이미지 전처리는 `AI/preprocessing/transform.py`의 `train_transform`, `val_test_transform`을 재사용합니다.
 
 ```bash
 python AI/train/train_stage2.py --epochs 10 --batch-size 32

@@ -16,6 +16,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from AI.train.utils import resolve_device, seed_everything
+
 MODEL_CHOICES = (
     "mobilenet_v3_small",
     "mobilenet_v3_large",
@@ -35,13 +37,13 @@ def import_training_dependencies() -> None:
     global f1_score
     global models
     global nn
-    global np
     global plt
     global random_split
     global torch
     global train_test_split
+    global train_transform
     global tqdm
-    global transforms
+    global val_test_transform
 
     try:
         import torch
@@ -50,14 +52,14 @@ def import_training_dependencies() -> None:
         os.environ.setdefault("MPLCONFIGDIR", str(matplotlib_cache_dir))
 
         import matplotlib.pyplot as plt
-        import numpy as np
         from sklearn.metrics import ConfusionMatrixDisplay, accuracy_score, confusion_matrix, f1_score
         from sklearn.model_selection import train_test_split
         from torch import nn
         from torch.utils.data import DataLoader, Subset, random_split
-        from torchvision import models, transforms
+        from torchvision import models
         from tqdm import tqdm
 
+        from AI.preprocessing.transform import train_transform, val_test_transform
         from AI.train import GARBAGE_CLASSES, GarbageStage2Dataset
     except ImportError as exc:
         raise SystemExit(
@@ -79,7 +81,6 @@ class TrainConfig:
     val_ratio: float
     seed: int
     num_workers: int
-    image_size: int
     max_samples: int | None
     freeze_backbone: bool
     pretrained: bool
@@ -100,7 +101,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--val-ratio", type=float, default=0.2)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num-workers", type=int, default=2)
-    parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument(
         "--max-samples",
         type=int,
@@ -124,44 +124,6 @@ def parse_args() -> argparse.Namespace:
         help="Training device. auto prefers CUDA, then Apple MPS, then CPU.",
     )
     return parser.parse_args()
-
-
-def seed_everything(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
-
-def resolve_device(device_name: str) -> torch.device:
-    if device_name == "auto":
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        if torch.backends.mps.is_available():
-            return torch.device("mps")
-        return torch.device("cpu")
-    return torch.device(device_name)
-
-
-def build_transforms(image_size: int) -> tuple[transforms.Compose, transforms.Compose]:
-    train_transform = transforms.Compose(
-        [
-            transforms.Resize((image_size, image_size)),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(10),
-            transforms.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.1),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ]
-    )
-    val_transform = transforms.Compose(
-        [
-            transforms.Resize((image_size, image_size)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ]
-    )
-    return train_transform, val_transform
 
 
 def split_indices(labels: list[int], val_ratio: float, seed: int) -> tuple[list[int], list[int]]:
@@ -341,7 +303,6 @@ def main() -> None:
         val_ratio=args.val_ratio,
         seed=args.seed,
         num_workers=args.num_workers,
-        image_size=args.image_size,
         max_samples=args.max_samples,
         freeze_backbone=args.freeze_backbone,
         pretrained=not args.no_pretrained,
@@ -352,7 +313,6 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    train_transform, val_transform = build_transforms(args.image_size)
     base_dataset = GarbageStage2Dataset(args.dataset_dir)
     base_indices = list(range(len(base_dataset)))
     if args.max_samples is not None:
@@ -367,7 +327,7 @@ def main() -> None:
     val_indices = [base_indices[index] for index in val_positions]
 
     train_dataset = Subset(GarbageStage2Dataset(args.dataset_dir, transform=train_transform), train_indices)
-    val_dataset = Subset(GarbageStage2Dataset(args.dataset_dir, transform=val_transform), val_indices)
+    val_dataset = Subset(GarbageStage2Dataset(args.dataset_dir, transform=val_test_transform), val_indices)
 
     train_loader = DataLoader(
         train_dataset,

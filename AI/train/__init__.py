@@ -6,6 +6,7 @@ from .datasets import (
     GarbageStage1Dataset,
     GarbageStage2Dataset,
 )
+from .utils import resolve_device, seed_everything
 
 __all__ = [
     "CLASS_TO_IDX",
@@ -14,4 +15,6 @@ __all__ = [
     "GarbageDataset",
     "GarbageStage1Dataset",
     "GarbageStage2Dataset",
+    "resolve_device",
+    "seed_everything",
 ]
