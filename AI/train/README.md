@@ -107,3 +107,38 @@ image, label, path = dataset[0]
 
 print(label, path)
 ```
+
+## Stage 2 모델 학습
+
+`train_stage2.py`는 10개 쓰레기 클래스를 분류하는 경량 전이학습 스크립트입니다.
+기본 모델은 모바일/브라우저 추론을 고려해 `MobileNetV3-Small`을 사용합니다.
+
+```bash
+python AI/train/train_stage2.py --epochs 10 --batch-size 32
+```
+
+EfficientNet-B0로 비교 실험을 하고 싶으면 아래처럼 실행합니다.
+
+```bash
+python AI/train/train_stage2.py --model-name efficientnet_b0 --epochs 10 --batch-size 32
+```
+
+설정과 출력 파일만 빠르게 확인하려면 일부 샘플만 사용해 smoke test를 실행할 수 있습니다.
+
+```bash
+python AI/train/train_stage2.py --epochs 1 --max-samples 100 --no-pretrained
+```
+
+학습 결과는 실행마다 `AI/train/runs/stage2/<model-name>-<timestamp>/` 아래에 저장됩니다.
+
+```text
+best_model.pt           # 검증 정확도가 가장 높은 체크포인트
+metrics.csv             # epoch별 train/val loss, accuracy, macro F1
+training_curves.png     # loss, accuracy 곡선
+confusion_matrix.png    # 검증 데이터 혼동 행렬
+config.json             # 학습 설정
+summary.json            # 최고 성능 요약
+```
+
+기본값은 ImageNet 사전학습 가중치를 사용하는 전이학습입니다.
+인터넷이 막혀 있거나 가중치 다운로드가 실패하면 `--no-pretrained`를 붙여 실행할 수 있습니다.
