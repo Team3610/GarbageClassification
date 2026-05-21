@@ -16,13 +16,26 @@
 Dataset/
 ├── .gitkeep
 ├── README.md
-├── battery/            
+├── battery/
 ├── biological/
 ├── cardboard/
 ├── clothes/
 ├── glass/
 ├── metal/
+├── non_garbage/        # Stage 1 (이진 분류) 음성 샘플
 ├── paper/
 ├── plastic/
 ├── shoes/
 └── trash/
+```
+
+## non_garbage/ — Stage 1 음성 샘플
+
+Stage 1(쓰레기 vs 비쓰레기 이진 분류) 학습용 "쓰레기 아님" 이미지.
+
+- **출처**: [Intel Image Classification](https://huggingface.co/datasets/sfarrukhm/intel-image-classification) (Hugging Face)
+- **장수**: 17,034장 (자연 풍경/건축물 6 카테고리: buildings, forest, glacier, mountain, sea, street)
+- **파일명 규칙**: `intel_<split>_<category>_<index>.jpg`
+- **License**: Intel 원본 데이터셋 라이선스 — 학습/연구 목적
+
+`GarbageStage1Dataset`이 `non_garbage/`, `not_garbage/`, `non_waste/` 폴더의 이미지를 라벨 `0`으로, 10개 garbage 폴더의 이미지를 라벨 `1`로 자동 로드합니다.

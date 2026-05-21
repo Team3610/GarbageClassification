@@ -6,6 +6,7 @@ import os
 import random
 import sys
 import tempfile
+from collections import Counter
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -18,11 +19,12 @@ if str(PROJECT_ROOT) not in sys.path:
 from AI.train.utils import resolve_device, seed_everything
 
 
+STAGE1_CLASS_NAMES = ("NonGarbage", "Garbage")
+
+
 def import_training_dependencies() -> None:
     global DataLoader
-    global GARBAGE_CLASSES
-    global GarbageStage2Dataset
-    global MODEL_CHOICES
+    global GarbageStage1Dataset
     global Subset
     global TrainConfig
     global build_model
@@ -46,9 +48,8 @@ def import_training_dependencies() -> None:
         from torch.utils.data import DataLoader, Subset
 
         from AI.preprocessing.transform import train_transform, val_test_transform
-        from AI.train import GARBAGE_CLASSES, GarbageStage2Dataset
+        from AI.train import GarbageStage1Dataset
         from AI.train.trainer import (
-            MODEL_CHOICES,
             TrainConfig,
             build_model,
             plot_confusion_matrix,
@@ -67,10 +68,10 @@ def import_training_dependencies() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Train a lightweight transfer-learning model for Stage 2 garbage classification."
+        description="Train a lightweight binary classifier for Stage 1 (garbage vs non-garbage)."
     )
     parser.add_argument("--dataset-dir", type=Path, default=PROJECT_ROOT / "Dataset")
-    parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "AI/train/runs/stage2")
+    parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "AI/train/runs/stage1")
     parser.add_argument(
         "--model-name",
         choices=(
@@ -144,7 +145,19 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    base_dataset = GarbageStage2Dataset(args.dataset_dir)
+    base_dataset = GarbageStage1Dataset(args.dataset_dir)
+    label_counts = Counter(label for _, label in base_dataset.samples)
+    if label_counts.get(0, 0) == 0:
+        raise SystemExit(
+            "Stage 1 학습에는 non-garbage 이미지가 필요합니다.\n"
+            f"'{args.dataset_dir}' 아래 'non_garbage/', 'not_garbage/', 'non_waste/' 중 한 폴더에 "
+            "비쓰레기 이미지를 추가하세요."
+        )
+    print(
+        f"Loaded {len(base_dataset)} samples "
+        f"(non_garbage={label_counts.get(0, 0)}, garbage={label_counts.get(1, 0)})."
+    )
+
     base_indices = list(range(len(base_dataset)))
     if args.max_samples is not None:
         if args.max_samples < 2:
@@ -157,8 +170,8 @@ def main() -> None:
     train_indices = [base_indices[index] for index in train_positions]
     val_indices = [base_indices[index] for index in val_positions]
 
-    train_dataset = Subset(GarbageStage2Dataset(args.dataset_dir, transform=train_transform), train_indices)
-    val_dataset = Subset(GarbageStage2Dataset(args.dataset_dir, transform=val_test_transform), val_indices)
+    train_dataset = Subset(GarbageStage1Dataset(args.dataset_dir, transform=train_transform), train_indices)
+    val_dataset = Subset(GarbageStage1Dataset(args.dataset_dir, transform=val_test_transform), val_indices)
 
     train_loader = DataLoader(
         train_dataset,
@@ -177,7 +190,7 @@ def main() -> None:
 
     model = build_model(
         model_name=args.model_name,
-        num_classes=len(GARBAGE_CLASSES),
+        num_classes=len(STAGE1_CLASS_NAMES),
         pretrained=not args.no_pretrained,
         freeze_backbone=args.freeze_backbone,
     ).to(device)
@@ -238,7 +251,7 @@ def main() -> None:
                 {
                     "model_name": args.model_name,
                     "model_state_dict": model.state_dict(),
-                    "class_names": GARBAGE_CLASSES,
+                    "class_names": STAGE1_CLASS_NAMES,
                     "config": asdict(config),
                     "metrics": row,
                 },
@@ -248,9 +261,9 @@ def main() -> None:
     plot_confusion_matrix(
         best_labels,
         best_predictions,
-        class_names=GARBAGE_CLASSES,
+        class_names=STAGE1_CLASS_NAMES,
         output_path=run_dir / "confusion_matrix.png",
-        title="Stage 2 Validation Confusion Matrix",
+        title="Stage 1 Validation Confusion Matrix",
     )
     (run_dir / "summary.json").write_text(
         json.dumps(
