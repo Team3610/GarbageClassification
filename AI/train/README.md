@@ -143,3 +143,77 @@ summary.json            # 최고 성능 요약
 
 기본값은 ImageNet 사전학습 가중치를 사용하는 전이학습입니다.
 인터넷이 막혀 있거나 가중치 다운로드가 실패하면 `--no-pretrained`를 붙여 실행할 수 있습니다.
+
+## ONNX 변환 및 계층적 추론
+
+학습이 끝난 `best_model.pt`는 브라우저/ONNX Runtime 추론을 위해 ONNX로 변환합니다.
+
+```bash
+python AI/export/export_checkpoint_to_onnx.py \
+  --checkpoint AI/train/runs/stage1/<run-name>/best_model.pt \
+  --output Frontend/public/models/stage1.onnx
+
+python AI/export/export_checkpoint_to_onnx.py \
+  --checkpoint AI/train/runs/stage2/<run-name>/best_model.pt \
+  --output Frontend/public/models/stage2.onnx
+```
+
+이미지 한 장에 대해 Stage 1(쓰레기 여부)과 Stage 2(10클래스 분류)를 순차 실행하려면 아래처럼 사용합니다.
+
+```bash
+python AI/inference/pipeline.py \
+  --image sample.jpg \
+  --stage1-model Frontend/public/models/stage1.onnx \
+  --stage2-model Frontend/public/models/stage2.onnx
+```
+
+Stage 2 앙상블은 옵션입니다. `--stage2-model`을 여러 번 넘기면 각 모델의 확률을 평균내 최종 클래스를 고릅니다.
+
+```bash
+python AI/inference/pipeline.py \
+  --image sample.jpg \
+  --stage1-model Frontend/public/models/stage1.onnx \
+  --stage2-model Frontend/public/models/stage2_a.onnx \
+  --stage2-model Frontend/public/models/stage2_b.onnx
+```
+
+단일 모델과 앙상블의 정확도/추론 시간을 비교하려면 Stage 2 벤치마크를 실행합니다.
+
+```bash
+python AI/inference/benchmark_stage2.py --model Frontend/public/models/stage2.onnx
+
+python AI/inference/benchmark_stage2.py \
+  --model Frontend/public/models/stage2_a.onnx \
+  --model Frontend/public/models/stage2_b.onnx
+```
+
+Python 코드에서 직접 호출할 수도 있습니다.
+
+```python
+from AI.inference import HierarchicalGarbageClassifier
+
+classifier = HierarchicalGarbageClassifier(
+    stage1_model_path="AI/models/stage1.onnx",
+    stage2_model_paths="AI/models/stage2.onnx",
+)
+
+result = classifier.predict("Dataset/plastic/plastic_1.jpg")
+print(result.to_dict())
+```
+
+Stage 2 앙상블을 코드에서 사용할 때는 `stage2_model_paths`에 여러 모델 경로를 리스트로 넘깁니다.
+
+```python
+from AI.inference import HierarchicalGarbageClassifier
+
+classifier = HierarchicalGarbageClassifier(
+    stage1_model_path="AI/models/stage1.onnx",
+    stage2_model_paths=[
+        "AI/models/stage2.onnx",
+        "AI/models/stage2_seed123.onnx",
+    ],
+)
+
+result = classifier.predict("Dataset/plastic/plastic_1.jpg")
+print(result.to_dict())
+```
