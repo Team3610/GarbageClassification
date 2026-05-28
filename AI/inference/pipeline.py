@@ -69,8 +69,14 @@ class OnnxImageClassifier:
             raise FileNotFoundError(f"ONNX model not found: {self.model_path}")
 
         self.class_names = tuple(class_names)
+        
+        # Enable all graph optimizations (fusion, constant folding, etc.)
+        session_options = ort.SessionOptions()
+        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        
         self.session = ort.InferenceSession(
             str(self.model_path),
+            sess_options=session_options,
             providers=providers or ["CPUExecutionProvider"],
         )
         self.input_name = self.session.get_inputs()[0].name
