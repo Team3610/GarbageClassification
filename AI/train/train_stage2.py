@@ -78,6 +78,8 @@ def parse_args() -> argparse.Namespace:
             "mobilenet_v3_large",
             "efficientnet_b0",
             "efficientnet_b1",
+            "squeezenet1_1",
+            "efficientnet_lite0",
         ),
         default="mobilenet_v3_small",
     )

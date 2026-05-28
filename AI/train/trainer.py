@@ -20,6 +20,8 @@ MODEL_CHOICES = (
     "mobilenet_v3_large",
     "efficientnet_b0",
     "efficientnet_b1",
+    "squeezenet1_1",
+    "efficientnet_lite0",
 )
 
 
@@ -91,6 +93,20 @@ def build_model(model_name: str, num_classes: int, pretrained: bool, freeze_back
         model = models.efficientnet_b1(weights=weights)
         in_features = model.classifier[-1].in_features
         model.classifier[-1] = nn.Linear(in_features, num_classes)
+    elif model_name == "squeezenet1_1":
+        weights = models.SqueezeNet1_1_Weights.DEFAULT if pretrained else None
+        model = models.squeezenet1_1(weights=weights)
+        in_features = model.classifier[1].in_channels
+        model.classifier[1] = nn.Conv2d(in_features, num_classes, kernel_size=1)
+        model.num_classes = num_classes
+    elif model_name == "efficientnet_lite0":
+        try:
+            import timm
+        except ImportError as exc:
+            raise ImportError(
+                "timm is required for efficientnet_lite0. Install it with `pip install timm`."
+            ) from exc
+        model = timm.create_model("efficientnet_lite0", pretrained=pretrained, num_classes=num_classes)
     else:
         raise ValueError(f"Unsupported model: {model_name}")
 

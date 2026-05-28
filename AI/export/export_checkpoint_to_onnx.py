@@ -37,7 +37,7 @@ def main() -> None:
             "PyTorch and torchvision are required. Install dependencies with `pip install -r requirements.txt`."
         ) from exc
 
-    checkpoint = torch.load(args.checkpoint, map_location="cpu")
+    checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     model_name = checkpoint["model_name"]
     class_names = tuple(checkpoint["class_names"])
 
