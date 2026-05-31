@@ -1,13 +1,18 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   BadgeCheck,
   Camera,
   Info,
   Leaf,
+  Loader2,
   Recycle,
   ScanSearch,
   Upload,
 } from 'lucide-react';
+
+import { HierarchicalClassifier } from './inference/classifier.js';
+import { MODEL_PRESETS } from './inference/config.js';
 
 const categories = [
   {
@@ -72,6 +77,8 @@ const categories = [
   },
 ];
 
+const categoryByName = Object.fromEntries(categories.map((c) => [c.name, c]));
+
 const steps = [
   '이미지 업로드',
   '브라우저에서 전처리',
@@ -79,7 +86,106 @@ const steps = [
   '분리수거 결과 확인',
 ];
 
+const PRESET_KEYS = Object.keys(MODEL_PRESETS);
+
 function App() {
+  const [presetKey, setPresetKey] = useState('fp32Ensemble');
+  const [modelStatus, setModelStatus] = useState({ state: 'idle', loaded: 0, total: 0 });
+  const [modelError, setModelError] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [prediction, setPrediction] = useState(null);
+  const [predictionError, setPredictionError] = useState(null);
+  const [isPredicting, setIsPredicting] = useState(false);
+  const classifierRef = useRef(null);
+  const lastFileRef = useRef(null);
+
+  const preset = MODEL_PRESETS[presetKey];
+
+  useEffect(() => {
+    let cancelled = false;
+    setModelStatus({ state: 'loading', loaded: 0, total: 1 + preset.stage2.length });
+    setModelError(null);
+    classifierRef.current = null;
+
+    const classifier = new HierarchicalClassifier(preset);
+    classifier
+      .load((progress) => {
+        if (!cancelled) {
+          setModelStatus({ state: 'loading', loaded: progress.loaded, total: progress.total });
+        }
+      })
+      .then(() => {
+        if (cancelled) return;
+        classifierRef.current = classifier;
+        setModelStatus({ state: 'ready', loaded: 1 + preset.stage2.length, total: 1 + preset.stage2.length });
+        if (lastFileRef.current) {
+          runPrediction(lastFileRef.current, classifier);
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error(error);
+        setModelError(error.message ?? '모델 로드에 실패했습니다.');
+        setModelStatus({ state: 'error', loaded: 0, total: 1 + preset.stage2.length });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [presetKey]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  async function runPrediction(file, classifier) {
+    setIsPredicting(true);
+    setPredictionError(null);
+    try {
+      const result = await classifier.predict(file);
+      setPrediction(result);
+    } catch (error) {
+      console.error(error);
+      setPredictionError(error.message ?? '추론에 실패했습니다.');
+      setPrediction(null);
+    } finally {
+      setIsPredicting(false);
+    }
+  }
+
+  function handleFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(URL.createObjectURL(file));
+    setPrediction(null);
+    setPredictionError(null);
+    lastFileRef.current = file;
+
+    if (classifierRef.current) {
+      runPrediction(file, classifierRef.current);
+    }
+  }
+
+  const headerStatus = useMemo(() => {
+    if (modelStatus.state === 'loading') {
+      return `모델 로드 중 (${modelStatus.loaded}/${modelStatus.total})`;
+    }
+    if (modelStatus.state === 'error') return '모델 로드 실패';
+    if (modelStatus.state === 'ready') return '모델 준비 완료';
+    return '대기';
+  }, [modelStatus]);
+
+  const resultCategory = prediction?.isGarbage ? categoryByName[prediction.label] : null;
+  const resultHeadline = !prediction
+    ? '분석 대기 중'
+    : prediction.isGarbage
+      ? '분류 완료'
+      : '쓰레기가 아닙니다';
+
   return (
     <div className="min-h-screen overflow-hidden bg-[#f7f7f2] text-[#18211f]">
       <div className="fixed inset-0 overflow-hidden">
@@ -98,10 +204,26 @@ function App() {
           </div>
         </div>
 
-        <button className="hidden items-center gap-2 rounded-full border border-[#cfd8d2] bg-white/75 px-4 py-2 text-sm font-semibold text-[#2d3935] shadow-sm backdrop-blur md:flex">
-          <Info size={16} />
-          Beta Preview
-        </button>
+        <div className="hidden items-center gap-3 md:flex">
+          <label className="flex items-center gap-2 rounded-full border border-[#cfd8d2] bg-white/75 px-3 py-2 text-xs font-semibold text-[#2d3935] shadow-sm backdrop-blur">
+            <span className="text-[#687671]">모델</span>
+            <select
+              value={presetKey}
+              onChange={(event) => setPresetKey(event.target.value)}
+              className="bg-transparent text-xs font-semibold text-[#18211f] outline-none"
+            >
+              {PRESET_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {MODEL_PRESETS[key].label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="inline-flex items-center gap-2 rounded-full border border-[#cfd8d2] bg-white/75 px-3 py-2 text-xs font-semibold text-[#2d3935] shadow-sm backdrop-blur">
+            {modelStatus.state === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <Info size={14} />}
+            {headerStatus}
+          </span>
+        </div>
       </header>
 
       <main className="relative z-10 grid min-h-[calc(100vh-76px)] grid-cols-1 gap-8 px-5 pb-8 sm:px-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)] lg:px-12">
@@ -115,7 +237,7 @@ function App() {
               사진 한 장으로 분리수거 방향을 빠르게 확인하세요.
             </h2>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[#53615c] sm:text-lg">
-              현재는 UI 프로토타입 단계입니다. 이후 브라우저 내 모델 추론을 연결해 업로드한 이미지의 쓰레기 종류와 배출 가이드를 보여줄 예정입니다.
+              브라우저 내 ONNX Runtime Web으로 직접 추론합니다. 이미지를 업로드하면 Stage1 쓰레기 판별 후 Stage2 앙상블이 10개 분류 중 가장 가능성 높은 항목을 알려줍니다.
             </p>
           </div>
 
@@ -124,42 +246,99 @@ function App() {
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-xl font-bold">이미지 업로드</h3>
-                  <p className="mt-1 text-sm text-[#687671]">jpg, png 이미지를 선택해 분석 준비 상태를 확인합니다.</p>
+                  <p className="mt-1 text-sm text-[#687671]">jpg, png 이미지를 선택하면 즉시 분류가 시작됩니다.</p>
                 </div>
                 <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e7f4ed] text-[#176b45]">
                   <Upload size={19} />
                 </button>
               </div>
 
-              <label className="group flex min-h-[260px] cursor-pointer flex-col items-center justify-center gap-5 rounded-[24px] border-2 border-dashed border-[#abc4b7] bg-[#f8fbf8] px-5 text-center transition hover:border-[#20885d] hover:bg-[#f2faf5]">
-                <input className="sr-only" type="file" accept="image/*" />
-                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#20352f] text-white shadow-lg shadow-emerald-900/15 transition group-hover:scale-105">
-                  <Camera size={28} />
-                </span>
-                <span>
-                  <strong className="block text-lg">이미지를 선택하거나 드래그하세요</strong>
-                  <span className="mt-2 block text-sm leading-6 text-[#65746e]">분석 로직은 아직 연결되지 않았고, 지금은 화면 흐름 확인용입니다.</span>
-                </span>
+              <label className="group flex min-h-[260px] cursor-pointer flex-col items-center justify-center gap-5 overflow-hidden rounded-[24px] border-2 border-dashed border-[#abc4b7] bg-[#f8fbf8] px-5 text-center transition hover:border-[#20885d] hover:bg-[#f2faf5]">
+                <input
+                  className="sr-only"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                />
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt="업로드된 이미지"
+                    className="max-h-[300px] w-auto rounded-2xl object-contain"
+                  />
+                ) : (
+                  <>
+                    <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#20352f] text-white shadow-lg shadow-emerald-900/15 transition group-hover:scale-105">
+                      <Camera size={28} />
+                    </span>
+                    <span>
+                      <strong className="block text-lg">이미지를 선택하거나 드래그하세요</strong>
+                      <span className="mt-2 block text-sm leading-6 text-[#65746e]">
+                        {modelStatus.state === 'ready'
+                          ? '준비 완료 — 이미지를 올리면 바로 분류됩니다.'
+                          : modelStatus.state === 'loading'
+                            ? `모델 로드 중 (${modelStatus.loaded}/${modelStatus.total})`
+                            : modelStatus.state === 'error'
+                              ? '모델 로드에 실패했습니다. 새로고침 후 다시 시도하세요.'
+                              : '잠시 후 다시 시도하세요.'}
+                      </span>
+                    </span>
+                  </>
+                )}
               </label>
+              {modelError ? (
+                <p className="mt-3 text-sm text-rose-600">{modelError}</p>
+              ) : null}
+              {predictionError ? (
+                <p className="mt-3 text-sm text-rose-600">{predictionError}</p>
+              ) : null}
             </section>
 
             <section className="rounded-[28px] border border-[#d9e2dc] bg-[#1d2a27] p-5 text-white shadow-[0_24px_70px_rgba(30,45,40,0.13)]">
               <div className="mb-6 flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-[#9ed7bd]">분류 결과</p>
-                  <h3 className="mt-1 text-2xl font-bold">분석 대기 중</h3>
+                  <h3 className="mt-1 text-2xl font-bold">{isPredicting ? '분석 중...' : resultHeadline}</h3>
                 </div>
-                <ScanSearch className="text-[#9ed7bd]" size={28} />
+                {isPredicting ? (
+                  <Loader2 className="animate-spin text-[#9ed7bd]" size={28} />
+                ) : (
+                  <ScanSearch className="text-[#9ed7bd]" size={28} />
+                )}
               </div>
 
               <div className="space-y-4">
                 <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
                   <p className="text-sm text-[#c7d7d0]">예상 카테고리</p>
-                  <p className="mt-2 text-3xl font-black">-</p>
+                  <p className="mt-2 text-3xl font-black">
+                    {prediction
+                      ? prediction.isGarbage
+                        ? (resultCategory?.label ?? prediction.label)
+                        : '비대상'
+                      : '-'}
+                  </p>
+                  {prediction ? (
+                    <p className="mt-1 text-xs text-white/70">
+                      {prediction.isGarbage ? `${prediction.label} · ` : ''}
+                      신뢰도 {(prediction.confidence * 100).toFixed(1)}%
+                      {prediction.ensembleUsed ? ` · 앙상블 ${prediction.stage2ModelCount}개` : ''}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
                   <p className="text-sm text-[#c7d7d0]">배출 안내</p>
-                  <p className="mt-2 text-sm leading-6 text-white/86">이미지를 업로드하면 재질별 분류 결과와 간단한 배출 팁이 표시됩니다.</p>
+                  <p className="mt-2 text-sm leading-6 text-white/86">
+                    {prediction
+                      ? prediction.isGarbage
+                        ? (resultCategory?.description ?? '재질에 맞춰 분리수거 해주세요.')
+                        : '쓰레기로 인식되지 않았습니다. 다른 이미지로 시도해보세요.'
+                      : '이미지를 업로드하면 재질별 분류 결과와 간단한 배출 팁이 표시됩니다.'}
+                  </p>
+                  {prediction ? (
+                    <p className="mt-3 text-xs text-white/60">
+                      Stage1 {prediction.stage1LatencyMs.toFixed(0)}ms · Stage2 {prediction.stage2LatencyMs.toFixed(0)}ms
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </section>
