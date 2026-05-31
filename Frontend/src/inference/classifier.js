@@ -4,11 +4,15 @@ import { DEFAULT_MODEL_CONFIG, GARBAGE_CLASSES, PREPROCESS } from './config.js';
 import { preprocessImage } from './preprocess.js';
 
 ort.env.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ort.env.versions.common}/dist/`;
+ort.env.wasm.numThreads = 1;
+ort.env.wasm.proxy = false;
 
-const SESSION_OPTIONS = Object.freeze({
-  executionProviders: ['wasm'],
-  graphOptimizationLevel: 'all',
-});
+function createSessionOptions() {
+  return {
+    executionProviders: ['wasm'],
+    graphOptimizationLevel: 'all',
+  };
+}
 
 export class HierarchicalClassifier {
   constructor(config = DEFAULT_MODEL_CONFIG) {
@@ -28,12 +32,12 @@ export class HierarchicalClassifier {
       onProgress?.({ stage, loaded, total });
     };
 
-    this.stage1Session = await ort.InferenceSession.create(this.config.stage1, SESSION_OPTIONS);
+    this.stage1Session = await ort.InferenceSession.create(this.config.stage1, createSessionOptions());
     report('stage1');
 
     this.stage2Sessions = [];
     for (const path of this.config.stage2) {
-      const session = await ort.InferenceSession.create(path, SESSION_OPTIONS);
+      const session = await ort.InferenceSession.create(path, createSessionOptions());
       this.stage2Sessions.push(session);
       report('stage2');
     }
