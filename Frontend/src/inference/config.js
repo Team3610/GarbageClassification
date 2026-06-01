@@ -21,7 +21,7 @@ export const PREPROCESS = Object.freeze({
 });
 
 export const DEFAULT_MODEL_CONFIG = Object.freeze({
-  stage1: '/models/stage1.onnx',
+  stage1: '/models/stage1_improved.onnx',
   stage2: ['/models/stage2.onnx', '/models/stage2_seed123.onnx'],
   garbageThreshold: 0.5,
 });
@@ -29,13 +29,13 @@ export const DEFAULT_MODEL_CONFIG = Object.freeze({
 export const MODEL_PRESETS = Object.freeze({
   fp32Ensemble: {
     label: 'FP32 앙상블 (정확도 우선)',
-    stage1: '/models/stage1.onnx',
+    stage1: '/models/stage1_improved.onnx',
     stage2: ['/models/stage2.onnx', '/models/stage2_seed123.onnx'],
     garbageThreshold: 0.5,
   },
   fp32Single: {
     label: 'FP32 단일 (균형)',
-    stage1: '/models/stage1.onnx',
+    stage1: '/models/stage1_improved.onnx',
     stage2: ['/models/stage2.onnx'],
     garbageThreshold: 0.5,
   },
