@@ -79,27 +79,67 @@ v1.0.0에는 아래 기능을 포함합니다.
 
 실제 Git 태그 생성, GitHub Release 생성, 원격 push는 자동으로 수행하지 않습니다. 릴리즈 담당자가 아래 절차를 직접 실행합니다.
 
+### 1. release 브랜치 생성
+
 ```bash
-git status
+git checkout develop
+git pull origin develop
+git checkout -b release/1.0.0
+```
+
+### 2. 배포 전 빌드 확인
+
+```bash
 cd Frontend
 npm install
 npm run build
 cd ..
 ```
 
-변경사항 확인 후 커밋합니다.
+### 3. 변경사항 커밋 및 release 브랜치 업로드
 
 ```bash
-git add README.md Frontend/package.json Frontend/package-lock.json Frontend/public/models
-git commit -m "chore: v1.0.0 배포 설정 정리"
+git status
+git add README.md Frontend/package.json Frontend/package-lock.json
+git commit -m "chore: prepare v1.0.0 release"
+git push -u origin release/1.0.0
 ```
 
-태그와 원격 반영은 릴리즈 담당자가 최종 확인 후 직접 실행합니다.
+### 4. main 병합
+
+GitHub에서 `release/1.0.0` 브랜치를 `main` 브랜치로 Pull Request 생성 후 병합합니다.
+
+### 5. v1.0.0 태그 생성
 
 ```bash
+git checkout main
+git pull origin main
 git tag v1.0.0
-git push origin develop
 git push origin v1.0.0
 ```
 
-GitHub Release는 GitHub 웹 UI에서 `v1.0.0` 태그를 선택해 생성합니다. 릴리즈 노트에는 위 v1.0.0 포함 범위와 Vercel 배포 URL을 함께 적습니다.
+### 6. develop 백머지
+
+릴리즈 브랜치의 변경사항을 `develop`에도 반영합니다.
+
+```bash
+git checkout develop
+git pull origin develop
+git merge release/1.0.0
+git push origin develop
+```
+
+또는 GitHub에서 `release/1.0.0` → `develop` Pull Request를 생성하여 병합할 수 있습니다.
+
+### 7. GitHub Release 생성
+
+GitHub Release는 GitHub 웹 UI에서 `v1.0.0` 태그를 선택해 생성합니다.
+
+릴리즈 노트에는 다음 내용을 포함합니다.
+
+- Stage1/Stage2 ONNX 추론 파이프라인
+- Python 추론 코드 및 브라우저 추론 코드
+- FP32 Stage2 앙상블
+- 모델 스왑 옵션
+- 이미지 업로드 기반 분리수거 가이드 UI
+- Vercel 배포 URL
