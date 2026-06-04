@@ -39,4 +39,11 @@ export const MODEL_PRESETS = Object.freeze({
     stage2: ['/models/stage2.onnx'],
     garbageThreshold: 0.5,
   },
+  sigmoid: {
+    label: '시그모이드 모델 (멀티레이블 기반)',
+    type: 'sigmoid',
+    modelPath: '/models/stage2_sigmoid.onnx',
+    garbageThreshold: 0.5,
+  },
 });
+

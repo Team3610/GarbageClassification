@@ -44,19 +44,23 @@ class GarbageDataset(Dataset):
 
     Stage 2:
         - 10 garbage class folders -> fixed class index
+        
+    sigmoid:
+        - 10 garbage class folders -> One-hot vector of class index (length 10)
+        - non-garbage folders -> Zero vector (length 10)
     """
 
     def __init__(
         self,
         root_dir: str | Path,
-        mode: Literal["stage1", "stage2"] = "stage2",
+        mode: Literal["stage1", "stage2", "sigmoid"] = "stage2",
         transform: Callable | None = None,
         target_transform: Callable | None = None,
         non_garbage_dirs: Iterable[str] = DEFAULT_NON_GARBAGE_DIRS,
         return_path: bool = False,
     ) -> None:
-        if mode not in {"stage1", "stage2"}:
-            raise ValueError("mode must be either 'stage1' or 'stage2'")
+        if mode not in {"stage1", "stage2", "sigmoid"}:
+            raise ValueError("mode must be 'stage1', 'stage2', or 'sigmoid'")
 
         self.root_dir = Path(root_dir)
         self.mode = mode
@@ -80,7 +84,14 @@ class GarbageDataset(Dataset):
 
         if self.transform is not None:
             image = self.transform(image)
-        if self.target_transform is not None:
+            
+        if self.mode == "sigmoid":
+            import torch
+            target = torch.zeros(10, dtype=torch.float32)
+            if label < 10:
+                target[label] = 1.0
+            label = target
+        elif self.target_transform is not None:
             label = self.target_transform(label)
 
         if self.return_path:
@@ -100,9 +111,10 @@ class GarbageDataset(Dataset):
             label = 1 if self.mode == "stage1" else CLASS_TO_IDX[class_name]
             samples.extend(self._collect_images(self.root_dir / folder_name, label))
 
-        if self.mode == "stage1":
+        if self.mode in {"stage1", "sigmoid"}:
+            non_garbage_label = 0 if self.mode == "stage1" else 10
             for folder_name in non_garbage_dirs:
-                samples.extend(self._collect_images(self.root_dir / folder_name, 0))
+                samples.extend(self._collect_images(self.root_dir / folder_name, non_garbage_label))
 
         return sorted(samples, key=lambda sample: str(sample[0]))
 
