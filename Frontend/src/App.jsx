@@ -11,7 +11,7 @@ import {
   Upload,
 } from 'lucide-react';
 
-import { HierarchicalClassifier } from './inference/classifier.js';
+import { HierarchicalClassifier, SigmoidClassifier } from './inference/classifier.js';
 import { MODEL_PRESETS } from './inference/config.js';
 
 const categories = [
@@ -90,6 +90,7 @@ const PRESET_KEYS = Object.keys(MODEL_PRESETS);
 
 function App() {
   const [presetKey, setPresetKey] = useState('fp32Ensemble');
+  const [garbageThreshold, setGarbageThreshold] = useState(0.5);
   const [modelStatus, setModelStatus] = useState({ state: 'idle', loaded: 0, total: 0 });
   const [modelError, setModelError] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -105,11 +106,15 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    setModelStatus({ state: 'loading', loaded: 0, total: 1 + preset.stage2.length });
+    const total = (preset.type === 'sigmoid') ? 1 : 1 + preset.stage2.length;
+    setModelStatus({ state: 'loading', loaded: 0, total });
     setModelError(null);
     classifierRef.current = null;
 
-    const classifier = new HierarchicalClassifier(preset);
+    const classifier = preset.type === 'sigmoid'
+      ? new SigmoidClassifier(preset)
+      : new HierarchicalClassifier(preset);
+
     classifier
       .load((progress) => {
         if (!cancelled) {
@@ -119,7 +124,7 @@ function App() {
       .then(() => {
         if (cancelled) return;
         classifierRef.current = classifier;
-        setModelStatus({ state: 'ready', loaded: 1 + preset.stage2.length, total: 1 + preset.stage2.length });
+        setModelStatus({ state: 'ready', loaded: total, total });
         if (lastFileRef.current) {
           runPrediction(lastFileRef.current, classifier);
         }
@@ -128,13 +133,23 @@ function App() {
         if (cancelled) return;
         console.error(error);
         setModelError(error.message ?? '모델 로드에 실패했습니다.');
-        setModelStatus({ state: 'error', loaded: 0, total: 1 + preset.stage2.length });
+        setModelStatus({ state: 'error', loaded: 0, total });
       });
 
     return () => {
       cancelled = true;
     };
   }, [presetKey]);
+
+  useEffect(() => {
+    setGarbageThreshold(preset.garbageThreshold);
+  }, [presetKey]);
+
+  useEffect(() => {
+    if (classifierRef.current && lastFileRef.current) {
+      runPrediction(lastFileRef.current, classifierRef.current);
+    }
+  }, [garbageThreshold]);
 
   useEffect(() => {
     return () => {
@@ -146,6 +161,7 @@ function App() {
     setIsPredicting(true);
     setPredictionError(null);
     try {
+      classifier.config.garbageThreshold = garbageThreshold;
       const result = await classifier.predict(file);
       setPrediction(result);
     } catch (error) {
@@ -266,7 +282,7 @@ function App() {
               사진 한 장으로 분리수거 방향을 빠르게 확인하세요.
             </h2>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[#53615c] sm:text-lg">
-              브라우저 내 ONNX Runtime Web으로 직접 추론합니다. 이미지를 업로드하면 Stage1 쓰레기 판별 후 Stage2 앙상블이 10개 분류 중 가장 가능성 높은 항목을 알려줍니다.
+              브라우저 내 ONNX Runtime Web으로 직접 추론합니다. 이미지를 업로드하면 선택한 분류 모델(2단계 Hierarchical 파이프라인, 11클래스 통합 모델 또는 시그모이드 모델)을 거쳐 최적의 결과를 제공합니다.
             </p>
           </div>
 
@@ -331,6 +347,29 @@ function App() {
                   </>
                 )}
               </label>
+              
+              <div className="mt-5 rounded-2xl border border-[#cfd8d2] bg-white/50 p-4 shadow-sm backdrop-blur">
+                <div className="flex items-center justify-between gap-3 text-xs font-bold text-[#2d3935]">
+                  <span className="text-[#687671]">쓰레기 판별 임계값 (Threshold)</span>
+                  <span className="rounded-full bg-[#18211f] px-2 py-0.5 text-[11px] font-extrabold text-white">
+                    {garbageThreshold.toFixed(2)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="0.9"
+                  step="0.05"
+                  value={garbageThreshold}
+                  onChange={(event) => setGarbageThreshold(parseFloat(event.target.value))}
+                  className="mt-3 h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-[#e3e8e5] accent-[#1f7a57] transition"
+                />
+                <div className="mt-2 flex justify-between text-[10px] font-semibold text-[#82918b]">
+                  <span>민감하게 분류 (0.1)</span>
+                  <span>엄격하게 차단 (0.9)</span>
+                </div>
+              </div>
+
               {modelError ? (
                 <p className="mt-3 text-sm text-rose-600">{modelError}</p>
               ) : null}
@@ -381,7 +420,9 @@ function App() {
                   </p>
                   {prediction ? (
                     <p className="mt-3 text-xs text-white/60">
-                      Stage1 {prediction.stage1LatencyMs.toFixed(0)}ms · Stage2 {prediction.stage2LatencyMs.toFixed(0)}ms
+                      {prediction.modelType === 'sigmoid'
+                        ? `추론 시간: ${prediction.latencyMs.toFixed(0)}ms`
+                        : `Stage1 ${prediction.stage1LatencyMs.toFixed(0)}ms · Stage2 ${prediction.stage2LatencyMs.toFixed(0)}ms`}
                     </p>
                   ) : null}
                 </div>

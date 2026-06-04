@@ -87,6 +87,75 @@ export class HierarchicalClassifier {
   }
 }
 
+
+export class SigmoidClassifier {
+  constructor(config) {
+    if (!config?.modelPath) {
+      throw new Error('Sigmoid classifier 설정에는 modelPath 경로가 필요합니다.');
+    }
+    this.config = config;
+    this.session = null;
+  }
+
+  async load(onProgress) {
+    onProgress?.({ stage: 'sigmoid', loaded: 0, total: 1 });
+    this.session = await ort.InferenceSession.create(this.config.modelPath, createSessionOptions());
+    onProgress?.({ stage: 'sigmoid', loaded: 1, total: 1 });
+  }
+
+  async predict(imageSource) {
+    if (!this.session) {
+      throw new Error('모델이 로드되지 않았습니다. load()를 먼저 호출하세요.');
+    }
+
+    const tensorData = await preprocessImage(imageSource);
+    const tensor = new ort.Tensor('float32', tensorData, [1, 3, PREPROCESS.cropSize, PREPROCESS.cropSize]);
+
+    const started = performance.now();
+    const feeds = { [this.session.inputNames[0]]: tensor };
+    const output = await this.session.run(feeds);
+    const logits = Array.from(output[this.session.outputNames[0]].data);
+    
+    // Apply sigmoid activation
+    const probs = logits.map((val) => 1 / (1 + Math.exp(-val)));
+    const latencyMs = performance.now() - started;
+
+    const idx = argmax(probs);
+    const maxProb = probs[idx];
+    const threshold = this.config.garbageThreshold ?? 0.5;
+
+    if (maxProb < threshold) {
+      return {
+        isGarbage: false,
+        label: '쓰레기가 아닙니다',
+        confidence: 1 - maxProb,
+        stage1Confidence: maxProb,
+        stage1LatencyMs: latencyMs,
+        stage2LatencyMs: 0,
+        ensembleUsed: false,
+        stage2ModelCount: 0,
+        modelType: 'sigmoid',
+        latencyMs: latencyMs,
+      };
+    } else {
+      return {
+        isGarbage: true,
+        label: GARBAGE_CLASSES[idx],
+        confidence: maxProb,
+        stage1Confidence: maxProb,
+        stage1LatencyMs: 0,
+        stage2LatencyMs: latencyMs,
+        ensembleUsed: false,
+        stage2ModelCount: 1,
+        modelType: 'sigmoid',
+        latencyMs: latencyMs,
+      };
+    }
+  }
+}
+
+
+
 async function runSoftmax(session, tensor) {
   const feeds = { [session.inputNames[0]]: tensor };
   const output = await session.run(feeds);
