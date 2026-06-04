@@ -84,3 +84,21 @@ for sample in dataset:
 
 print("완료!")
 ```
+
+---
+
+## 🔩 TACO 데이터셋을 활용한 금속(Metal) 데이터 보강
+
+금속 분류 성능을 향상시키기 위해, 오픈 데이터셋인 **TACO (Trash Annotations in Context)**에서 다양한 금속 쓰레기 이미지(캔, 호일, 스프레이캔, 병뚜껑 등)를 추가 수집하여 `Dataset/metal/` 폴더에 구성합니다.
+
+제공된 파이썬 스크립트 [prepare_taco_metal.py](file:///C:/Users/kimgu/OneDrive/바탕 화면/GitHub/GarbageClassification/AI/train/prepare_taco_metal.py)를 실행하여 금속 관련 객체 이미지만 자동으로 필터링 및 다운로드할 수 있습니다.
+
+### 실행 방법
+프로젝트 루트 폴더에서 아래 명령을 실행하면, TACO 데이터셋의 JSON 어노테이션 파일에서 금속류 세부 카테고리(`Aluminium foil`, `Aluminium can`, `Aerosol`, `Metal bottle cap` 등) 이미지를 찾아 최대 150장을 다운로드하여 `Dataset/metal/` 폴더에 저장합니다.
+
+```bash
+python AI/train/prepare_taco_metal.py --max-samples 150
+```
+
+* **출처**: [TACO Dataset GitHub (CC BY 4.0)](https://github.com/pedropro/taco)
+* **파일명 규칙**: `taco_metal_<image_id>.jpg`
