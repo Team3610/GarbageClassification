@@ -91,7 +91,7 @@ const PRESET_KEYS = Object.keys(MODEL_PRESETS);
 
 function App() {
   const [presetKey, setPresetKey] = useState('fp32Ensemble');
-  const [garbageThreshold, setGarbageThreshold] = useState(0.5);
+  const [garbageThreshold, setGarbageThreshold] = useState(0.8);
   const [modelStatus, setModelStatus] = useState({ state: 'idle', loaded: 0, total: 0 });
   const [modelError, setModelError] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
