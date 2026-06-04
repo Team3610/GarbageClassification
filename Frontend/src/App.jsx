@@ -279,8 +279,11 @@ function App() {
               <Leaf size={16} />
               Client-side waste sorting assistant
             </p>
-            <h2 className="max-w-3xl text-4xl font-black leading-tight tracking-normal text-[#101816] sm:text-5xl lg:text-6xl">
-              사진 한 장으로 분리수거 방향을 빠르게 확인하세요.
+            <h2 className="hero-title font-black text-[#101816]">
+              <span className="hero-title-line">사진 한 장으로</span>
+              <span className="hero-title-line">
+                분리수거 방향을 <span className="hero-title-tail">확인하세요.</span>
+              </span>
             </h2>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[#53615c] sm:text-lg">
               브라우저 내 ONNX Runtime Web으로 직접 추론합니다. 이미지를 업로드하면 선택한 분류 모델(2단계 Hierarchical 파이프라인, 11클래스 통합 모델 또는 시그모이드 모델)을 거쳐 최적의 결과를 제공합니다.
