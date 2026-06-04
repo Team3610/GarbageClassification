@@ -96,7 +96,9 @@ function App() {
   const [prediction, setPrediction] = useState(null);
   const [predictionError, setPredictionError] = useState(null);
   const [isPredicting, setIsPredicting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const classifierRef = useRef(null);
+  const fileInputRef = useRef(null);
   const lastFileRef = useRef(null);
 
   const preset = MODEL_PRESETS[presetKey];
@@ -155,11 +157,13 @@ function App() {
     }
   }
 
-  function handleFileChange(event) {
-    const file = event.target.files?.[0];
+  function selectFile(file) {
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setPredictionError('이미지 파일만 업로드할 수 있습니다.');
+      return;
+    }
 
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(file));
     setPrediction(null);
     setPredictionError(null);
@@ -168,6 +172,31 @@ function App() {
     if (classifierRef.current) {
       runPrediction(file, classifierRef.current);
     }
+  }
+
+  function handleFileChange(event) {
+    selectFile(event.target.files?.[0]);
+    event.target.value = '';
+  }
+
+  function handleUploadButtonClick() {
+    fileInputRef.current?.click();
+  }
+
+  function handleDragOver(event) {
+    event.preventDefault();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave(event) {
+    event.preventDefault();
+    setIsDragging(false);
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    setIsDragging(false);
+    selectFile(event.dataTransfer.files?.[0]);
   }
 
   const headerStatus = useMemo(() => {
@@ -248,13 +277,29 @@ function App() {
                   <h3 className="text-xl font-bold">이미지 업로드</h3>
                   <p className="mt-1 text-sm text-[#687671]">jpg, png 이미지를 선택하면 즉시 분류가 시작됩니다.</p>
                 </div>
-                <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e7f4ed] text-[#176b45]">
+                <button
+                  type="button"
+                  onClick={handleUploadButtonClick}
+                  aria-label="이미지 파일 선택"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e7f4ed] text-[#176b45] transition hover:bg-[#d8eee3] focus:outline-none focus:ring-2 focus:ring-[#20885d] focus:ring-offset-2"
+                >
                   <Upload size={19} />
                 </button>
               </div>
 
-              <label className="group flex min-h-[260px] cursor-pointer flex-col items-center justify-center gap-5 overflow-hidden rounded-[24px] border-2 border-dashed border-[#abc4b7] bg-[#f8fbf8] px-5 text-center transition hover:border-[#20885d] hover:bg-[#f2faf5]">
+              <label
+                onDragEnter={handleDragOver}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`group flex min-h-[260px] cursor-pointer flex-col items-center justify-center gap-5 overflow-hidden rounded-[24px] border-2 border-dashed px-5 text-center transition ${
+                  isDragging
+                    ? 'border-[#20885d] bg-[#e8f6ee] ring-4 ring-[#bfe4cf]'
+                    : 'border-[#abc4b7] bg-[#f8fbf8] hover:border-[#20885d] hover:bg-[#f2faf5]'
+                }`}
+              >
                 <input
+                  ref={fileInputRef}
                   className="sr-only"
                   type="file"
                   accept="image/*"
