@@ -19,6 +19,15 @@ from AI.train.utils import resolve_device, seed_everything
 
 
 def import_training_dependencies() -> None:
+    """학습 전용 의존성을 실행 시점에 로드해 argparse/help 사용과 import 비용을 낮춘다.
+
+    Returns:
+        None
+
+    Raises:
+        SystemExit: 학습에 필요한 PyTorch, sklearn, torchvision 등의 의존성이 없는 경우.
+    """
+
     global DataLoader
     global GARBAGE_CLASSES
     global GarbageStage2Dataset
@@ -37,6 +46,7 @@ def import_training_dependencies() -> None:
     global val_test_transform
 
     try:
+        # matplotlib은 그래프 저장에만 필요하지만 캐시 경로 문제로 학습 시작 전에 실패할 수 있다.
         matplotlib_cache_dir = Path(tempfile.gettempdir()) / "matplotlib-cache"
         matplotlib_cache_dir.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("MPLCONFIGDIR", str(matplotlib_cache_dir))
@@ -66,6 +76,12 @@ def import_training_dependencies() -> None:
 
 
 def parse_args() -> argparse.Namespace:
+    """Stage 2 학습 CLI 옵션을 파싱한다.
+
+    Returns:
+        argparse.Namespace: 데이터셋 경로, 출력 경로, 모델명, 하이퍼파라미터, device 옵션.
+    """
+
     parser = argparse.ArgumentParser(
         description="Train a lightweight transfer-learning model for Stage 2 garbage classification."
     )
@@ -116,6 +132,12 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """CLI 엔트리포인트로 Stage 2 학습, 검증, artifact 저장을 수행한다.
+
+    Returns:
+        None
+    """
+
     args = parse_args()
     import_training_dependencies()
     seed_everything(args.seed)
@@ -152,13 +174,19 @@ def main() -> None:
         if args.max_samples < 2:
             raise ValueError("--max-samples must be at least 2.")
         sample_count = min(args.max_samples, len(base_indices))
+        # smoke test도 seed가 같으면 같은 샘플과 split을 재현할 수 있도록 split 전에 subset을 고정한다.
+        # split 이후에 max_samples를 자르면 클래스 비율이 우연히 깨질 수 있어 검증 지표가 흔들린다.
         base_indices = random.Random(args.seed).sample(base_indices, sample_count)
 
     labels = [base_dataset.samples[index][1] for index in base_indices]
+    # Stage 2는 클래스별 데이터 수 차이가 있을 수 있어 가능한 경우 stratified split을 사용한다.
+    # split_indices 내부에서 stratify가 불가능한 작은 샘플은 random split으로 fallback한다.
     train_positions, val_positions = split_indices(labels, args.val_ratio, args.seed)
+    # split_indices는 labels 배열 기준 위치를 반환하므로 실제 Dataset index로 다시 변환한다.
     train_indices = [base_indices[index] for index in train_positions]
     val_indices = [base_indices[index] for index in val_positions]
 
+    # 같은 이미지 목록에 train/validation 전용 transform만 다르게 적용하기 위해 Dataset 인스턴스를 분리한다.
     train_dataset = Subset(GarbageStage2Dataset(args.dataset_dir, transform=train_transform), train_indices)
     val_dataset = Subset(GarbageStage2Dataset(args.dataset_dir, transform=val_test_transform), val_indices)
 
@@ -184,6 +212,7 @@ def main() -> None:
         freeze_backbone=args.freeze_backbone,
     ).to(device)
     criterion = nn.CrossEntropyLoss()
+    # freeze_backbone 옵션을 켠 경우 classifier head처럼 requires_grad=True인 파라미터만 optimizer에 넘긴다.
     optimizer = torch.optim.AdamW(
         [parameter for parameter in model.parameters() if parameter.requires_grad],
         lr=args.learning_rate,
@@ -233,6 +262,8 @@ def main() -> None:
         )
 
         if val_acc >= best_val_accuracy:
+            # 동률일 때 최신 epoch을 저장해 summary와 checkpoint가 마지막 최고 성능 기준을 공유하게 한다.
+            # checkpoint에는 ONNX export가 모델 구조를 복원할 수 있도록 model_name과 class_names도 함께 넣는다.
             best_val_accuracy = val_acc
             best_labels = val_labels
             best_predictions = val_predictions
