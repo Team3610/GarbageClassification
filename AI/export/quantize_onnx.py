@@ -13,6 +13,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    /**
+     * CLI 인자를 파싱합니다.
+     * @returns {argparse.Namespace} 파싱된 명령행 인수 객체
+     */
+    """
     parser = argparse.ArgumentParser(description="Quantize an ONNX model using dynamic or static quantization.")
     parser.add_argument("--input", type=Path, required=True, help="Path to input FP32 ONNX model")
     parser.add_argument("--output", type=Path, required=True, help="Path to output INT8 quantized ONNX model")
@@ -23,21 +29,30 @@ def parse_args() -> argparse.Namespace:
         help="Quantization mode (dynamic or static). Static is recommended for CNN accuracy.",
     )
     parser.add_argument("--dataset-dir", type=Path, default=PROJECT_ROOT / "Dataset", help="Dataset directory for static calibration")
+    # // --num-calibration 기본값 50은 너무 크지도 작지도 않게 활성화(Activation) 분포 정보를 복원하며, static 양자화 과정 속도를 높이기 위한 적정 수치입니다.
     parser.add_argument("--num-calibration", type=int, default=50, help="Number of calibration images for static mode")
     return parser.parse_args()
 
 
 def get_calibration_images(dataset_dir: Path, num_images: int) -> list[Path]:
+    """
+    /**
+     * static 캘리브레이션에 사용할 이미지 경로 목록을 생성합니다.
+     * @param {Path} dataset_dir - 데이터셋 루트 디렉토리 경로
+     * @param {int} num_images - 추출할 이미지 최대 개수
+     * @returns {list[Path]} 이미지 파일 경로 리스트
+     */
+    """
     image_extensions = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
     all_images = []
     for path in dataset_dir.rglob("*"):
         if path.is_file() and path.suffix.lower() in image_extensions:
             all_images.append(path)
     
-    # 셔플 없이 균일하게 분배하여 선택
     if not all_images:
         return []
         
+    # // 특정 카테고리에 편향되지 않고 데이터 전체 분포에서 이미지를 균일한 간격(step)으로 샘플링하기 위해 셔플을 제외하고 슬라이싱합니다.
     step = max(1, len(all_images) // num_images)
     return all_images[::step][:num_images]
 
@@ -75,8 +90,14 @@ def main() -> None:
             raise SystemExit(f"Dynamic quantization failed: {e}")
             
     else:  # static mode
-        # CalibrationDataReader 정의
         class ONNXCalibrationDataReader(CalibrationDataReader):
+            """
+            /**
+             * static 양자화를 위해 입력 텐서 데이터를 로드하는 CalibrationDataReader 구현체입니다.
+             * @param {list[Path]} image_paths - 캘리브레이션용 이미지 파일 경로 목록
+             * @param {str} input_name - ONNX 모델의 입력 레이어명
+             */
+            """
             def __init__(self, image_paths: list[Path], input_name: str):
                 self.image_paths = image_paths
                 self.input_name = input_name
@@ -91,7 +112,6 @@ def main() -> None:
                 except StopIteration:
                     return None
 
-        # 입력 레이어 이름 찾기
         session = ort.InferenceSession(str(args.input), providers=["CPUExecutionProvider"])
         input_name = session.get_inputs()[0].name
         
@@ -102,13 +122,13 @@ def main() -> None:
         print(f"Using {len(calib_images)} images for static calibration...")
         data_reader = ONNXCalibrationDataReader(calib_images, input_name)
         
-        # Static Quantization 실행
         try:
             quantize_static(
                 model_input=args.input,
                 model_output=args.output,
                 calibration_data_reader=data_reader,
-                quant_format=QuantFormat.QDQ, # QDQ format is best for ORT Web
+                # // QDQ 형식은 활성화와 가중치에 명시적 QuantizeLinear/DequantizeLinear 노드를 배치하여 ONNX Runtime Web에서 가장 최적화된 연산 효율을 보장합니다.
+                quant_format=QuantFormat.QDQ, 
                 activation_type=QuantType.QUInt8,
                 weight_type=QuantType.QInt8,
                 per_channel=True,
@@ -117,7 +137,6 @@ def main() -> None:
         except Exception as e:
             raise SystemExit(f"Static quantization failed: {e}")
 
-    # 파일 크기 계산 및 비교
     input_size = args.input.stat().st_size / (1024 * 1024)
     output_size = args.output.stat().st_size / (1024 * 1024)
     reduction = (1.0 - (output_size / input_size)) * 100.0
@@ -127,7 +146,7 @@ def main() -> None:
     print(f"Quantized Model (INT8) : {output_size:.2f} MB")
     print(f"Size Reduction         : {reduction:.2f}%")
     
-    # 평가 기준 검증 메시지
+    # // 모바일/웹 서비스 로딩 성능 기준(Stage 1은 3MB 이하, Stage 2는 5MB 이하)을 통과하는지 검사합니다.
     is_stage1 = "stage1" in args.input.name.lower()
     is_stage2 = "stage2" in args.input.name.lower()
     

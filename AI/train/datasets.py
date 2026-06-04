@@ -5,6 +5,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 
+# // 한국 환경부 분리배출 가이드라인 및 TACO 데이터셋 분류 기준을 참고하여 선정한 실생활 10대 쓰레기 핵심 분류 카테고리입니다.
 GARBAGE_CLASSES: tuple[str, ...] = (
     "Clothes",
     "Glass",
@@ -28,6 +29,7 @@ FOLDER_TO_CLASS: dict[str, str] = {
     class_name.lower(): class_name for class_name in GARBAGE_CLASSES
 }
 IMAGE_EXTENSIONS: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+# // 학습 기여도를 높이기 위해 사용자가 폴더명을 non_garbage, not_garbage, non_waste 등으로 지정하여 수집한 비쓰레기 데이터를 모두 식별할 수 있도록 다중 폴더명을 허용합니다.
 DEFAULT_NON_GARBAGE_DIRS: tuple[str, ...] = (
     "non_garbage",
     "not_garbage",
@@ -36,18 +38,10 @@ DEFAULT_NON_GARBAGE_DIRS: tuple[str, ...] = (
 
 
 class GarbageDataset(Dataset):
-    """PyTorch Dataset for Stage 1 and Stage 2 garbage classification.
-
-    Stage 1:
-        - non-garbage folders -> 0
-        - 10 garbage class folders -> 1
-
-    Stage 2:
-        - 10 garbage class folders -> fixed class index
-        
-    sigmoid:
-        - 10 garbage class folders -> One-hot vector of class index (length 10)
-        - non-garbage folders -> Zero vector (length 10)
+    """
+    /**
+     * Stage 1(이진 분류), Stage 2(10클래스 분류) 및 Sigmoid(10클래스 멀티레이블 분류)용 PyTorch Dataset 클래스입니다.
+     */
     """
 
     def __init__(
@@ -59,6 +53,18 @@ class GarbageDataset(Dataset):
         non_garbage_dirs: Iterable[str] = DEFAULT_NON_GARBAGE_DIRS,
         return_path: bool = False,
     ) -> None:
+        """
+        /**
+         * GarbageDataset 클래스를 초기화합니다.
+         * @param {str | Path} root_dir - 데이터셋의 루트 경로
+         * @param {Literal["stage1", "stage2", "sigmoid"]} mode - 학습 파이프라인 단계 (stage1, stage2, sigmoid)
+         * @param {Callable | None} transform - 이미지 텐서 변환 함수
+         * @param {Callable | None} target_transform - 타겟 라벨 변환 함수
+         * @param {Iterable[str]} non_garbage_dirs - 비쓰레기 데이터 디렉토리 목록
+         * @param {bool} return_path - 파일 경로 반환 여부
+         * @returns {None}
+         */
+        """
         if mode not in {"stage1", "stage2", "sigmoid"}:
             raise ValueError("mode must be 'stage1', 'stage2', or 'sigmoid'")
 
@@ -76,9 +82,22 @@ class GarbageDataset(Dataset):
             )
 
     def __len__(self) -> int:
+        """
+        /**
+         * 데이터셋의 전체 샘플 개수를 반환합니다.
+         * @returns {int} 샘플 개수
+         */
+        """
         return len(self.samples)
 
     def __getitem__(self, index: int):
+        """
+        /**
+         * 인덱스에 해당하는 샘플(이미지 및 라벨)을 반환합니다.
+         * @param {int} index - 샘플 인덱스
+         * @returns {tuple[torch.Tensor, int | torch.Tensor] | tuple[torch.Tensor, int | torch.Tensor, str]} 이미지, 라벨 (필요 시 파일경로 추가)
+         */
+        """
         image_path, label = self.samples[index]
         image = Image.open(image_path).convert("RGB")
 
@@ -87,6 +106,7 @@ class GarbageDataset(Dataset):
             
         if self.mode == "sigmoid":
             import torch
+            # // sigmoid 모드(Multi-label)에서는 쓰레기가 아닌 이미지(label=10)는 모든 클래스가 0인 zero-vector로, 쓰레기인 이미지는 해당 클래스 인덱스만 1.0인 10차원 One-hot 벡터로 변환합니다.
             target = torch.zeros(10, dtype=torch.float32)
             if label < 10:
                 target[label] = 1.0
@@ -100,11 +120,24 @@ class GarbageDataset(Dataset):
 
     @property
     def class_to_idx(self) -> dict[str, int]:
+        """
+        /**
+         * 현재 모드에 매핑되는 클래스-인덱스 딕셔너리를 반환합니다.
+         * @returns {dict[str, int]} 클래스명과 인덱스 쌍
+         */
+        """
         if self.mode == "stage1":
             return {"NonGarbage": 0, "Garbage": 1}
         return CLASS_TO_IDX.copy()
 
     def _load_samples(self, non_garbage_dirs: tuple[str, ...]) -> list[tuple[Path, int]]:
+        """
+        /**
+         * 전체 클래스 디렉토리에서 이미지 경로와 라벨 목록을 스캔하여 로드합니다.
+         * @param {tuple[str, ...]} non_garbage_dirs - 비쓰레기 데이터 디렉토리 튜플
+         * @returns {list[tuple[Path, int]]} 이미지 경로와 라벨 튜플 리스트
+         */
+        """
         samples: list[tuple[Path, int]] = []
 
         for folder_name, class_name in FOLDER_TO_CLASS.items():
@@ -119,6 +152,14 @@ class GarbageDataset(Dataset):
         return sorted(samples, key=lambda sample: str(sample[0]))
 
     def _collect_images(self, directory: Path, label: int) -> list[tuple[Path, int]]:
+        """
+        /**
+         * 특정 디렉토리 내 지원하는 확장자를 가진 이미지들을 재귀적으로 수집합니다.
+         * @param {Path} directory - 스캔 대상 디렉토리
+         * @param {int} label - 할당할 정수 라벨
+         * @returns {list[tuple[Path, int]]} 매칭된 이미지 경로와 라벨 리스트
+         */
+        """
         if not directory.is_dir():
             return []
 
@@ -130,14 +171,22 @@ class GarbageDataset(Dataset):
 
 
 class GarbageStage1Dataset(GarbageDataset):
-    """Binary dataset: non-garbage=0, garbage=1."""
+    """
+    /**
+     * Stage 1 이진 분류 데이터셋을 표현합니다.
+     */
+    """
 
     def __init__(self, root_dir: str | Path, **kwargs) -> None:
         super().__init__(root_dir=root_dir, mode="stage1", **kwargs)
 
 
 class GarbageStage2Dataset(GarbageDataset):
-    """10-class garbage classification dataset."""
+    """
+    /**
+     * Stage 2 10개 클래스 쓰레기 분류 데이터셋을 표현합니다.
+     */
+    """
 
     def __init__(self, root_dir: str | Path, **kwargs) -> None:
         super().__init__(root_dir=root_dir, mode="stage2", **kwargs)
