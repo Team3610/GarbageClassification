@@ -13,6 +13,7 @@ import {
 
 import { HierarchicalClassifier } from './inference/classifier.js';
 import { MODEL_PRESETS } from './inference/config.js';
+import { Result3DViewer } from './components/Result3DViewer.jsx';
 
 const categories = [
   {
@@ -431,20 +432,23 @@ function App() {
 
           <div className="rounded-[32px] border border-[#d9e2dc] bg-[#172522] p-5 text-white shadow-[0_24px_70px_rgba(30,45,40,0.16)]">
             <div className="mb-5">
-              <p className="text-sm font-semibold text-[#9ed7bd]">향후 Spline 적용 위치</p>
-              <h3 className="mt-1 text-2xl font-black">분류 결과 3D 뷰어</h3>
+              <p className="text-sm font-semibold text-[#9ed7bd]">분류 결과 3D 뷰어</p>
+              <h3 className="mt-1 text-2xl font-black">분류 결과 3D 미리보기</h3>
               <p className="mt-3 text-sm leading-6 text-white/72">
-                Spline은 배경 장식이 아니라, 업로드 이미지가 분류된 뒤 결과물을 회전하며 확인하는 전용 뷰어에 연결할 예정입니다.
+                분류된 카테고리를 대표하는 3D 모델을 회전하고 확대해 확인할 수 있습니다.
               </p>
             </div>
 
-            <div className="flex aspect-[4/3] items-center justify-center rounded-[24px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))] p-6">
-              <div className="text-center">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/12 text-[#a8e0c6]">
-                  <ScanSearch size={28} />
-                </div>
-                <p className="mt-4 text-base font-bold">3D preview reserved</p>
-                <p className="mt-2 text-sm leading-6 text-white/64">분석 결과가 생기기 전에는 Spline scene을 로드하지 않습니다.</p>
+            <Result3DViewer prediction={prediction} />
+            <div className="mt-4 flex items-start gap-3 rounded-2xl bg-white/8 p-4 ring-1 ring-white/10">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-[#a8e0c6]">
+                <ScanSearch size={18} />
+              </div>
+              <div>
+                <p className="text-sm font-bold">현재는 자체 생성 GLB 예시 모델입니다.</p>
+                <p className="mt-1 text-sm leading-6 text-white/64">
+                  더 정교한 GLB/OBJ 에셋을 준비하면 이 컴포넌트에서 클래스별 모델 파일만 교체할 수 있습니다.
+                </p>
               </div>
             </div>
           </div>

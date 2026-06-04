@@ -241,6 +241,8 @@ sketch
 [Ll]ib64
 [Ll]ocal
 [Ss]cripts
+!Frontend/scripts/
+!Frontend/scripts/generate-3d-models.mjs
 pyvenv.cfg
 pip-selfcheck.json
 
