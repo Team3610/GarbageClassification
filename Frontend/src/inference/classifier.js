@@ -3,7 +3,9 @@ import * as ort from 'onnxruntime-web';
 import { DEFAULT_MODEL_CONFIG, GARBAGE_CLASSES, PREPROCESS } from './config.js';
 import { preprocessImage } from './preprocess.js';
 
+// wasm 파일은 번들에 포함하지 않고 CDN에서 받아 Vercel 배포 크기와 초기 설정 부담을 줄인다.
 ort.env.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ort.env.versions.common}/dist/`;
+// 여러 모델을 순차 실행하는 데모 앱이라 브라우저별 worker/thread 차이를 줄이는 안정성 우선 설정이다.
 ort.env.wasm.numThreads = 1;
 ort.env.wasm.proxy = false;
 
@@ -24,6 +26,12 @@ export class HierarchicalClassifier {
     this.stage2Sessions = [];
   }
 
+  /**
+   * Stage1 이진 모델과 Stage2 다중분류 모델들을 순서대로 로드한다.
+   *
+   * @param {(progress: { stage: string, loaded: number, total: number }) => void} [onProgress]
+   * @returns {Promise<void>}
+   */
   async load(onProgress) {
     const total = 1 + this.config.stage2.length;
     let loaded = 0;
@@ -43,6 +51,12 @@ export class HierarchicalClassifier {
     }
   }
 
+  /**
+   * 업로드 이미지를 Stage1/Stage2 파이프라인으로 분류한다.
+   *
+   * @param {Blob | string | HTMLImageElement} imageSource 브라우저에서 로드 가능한 이미지 입력
+   * @returns {Promise<object>} UI에서 바로 표시할 수 있는 분류 결과와 latency 정보
+   */
   async predict(imageSource) {
     if (!this.stage1Session || this.stage2Sessions.length === 0) {
       throw new Error('모델이 로드되지 않았습니다. load()를 먼저 호출하세요.');
@@ -56,6 +70,7 @@ export class HierarchicalClassifier {
     const stage1LatencyMs = performance.now() - stage1Started;
 
     const garbageConfidence = stage1Probs[1];
+    // Stage1에서 먼저 비대상 이미지를 차단해야 Stage2가 무조건 10개 쓰레기 클래스로 끼워 맞추는 상황을 줄일 수 있다.
     if (garbageConfidence < this.config.garbageThreshold) {
       return {
         isGarbage: false,
@@ -97,12 +112,24 @@ export class SigmoidClassifier {
     this.session = null;
   }
 
+  /**
+   * 단일 sigmoid ONNX 모델을 로드한다.
+   *
+   * @param {(progress: { stage: string, loaded: number, total: number }) => void} [onProgress]
+   * @returns {Promise<void>}
+   */
   async load(onProgress) {
     onProgress?.({ stage: 'sigmoid', loaded: 0, total: 1 });
     this.session = await ort.InferenceSession.create(this.config.modelPath, createSessionOptions());
     onProgress?.({ stage: 'sigmoid', loaded: 1, total: 1 });
   }
 
+  /**
+   * sigmoid 출력값을 클래스별 독립 확률로 해석해 가장 높은 클래스를 선택한다.
+   *
+   * @param {Blob | string | HTMLImageElement} imageSource 브라우저에서 로드 가능한 이미지 입력
+   * @returns {Promise<object>} UI에서 바로 표시할 수 있는 분류 결과와 latency 정보
+   */
   async predict(imageSource) {
     if (!this.session) {
       throw new Error('모델이 로드되지 않았습니다. load()를 먼저 호출하세요.');
@@ -116,7 +143,7 @@ export class SigmoidClassifier {
     const output = await this.session.run(feeds);
     const logits = Array.from(output[this.session.outputNames[0]].data);
     
-    // Apply sigmoid activation
+    // softmax 모델과 달리 각 클래스 로그릿을 독립 확률로 해석한다.
     const probs = logits.map((val) => 1 / (1 + Math.exp(-val)));
     const latencyMs = performance.now() - started;
 
@@ -168,6 +195,8 @@ async function ensembleProbs(sessions, tensor) {
   for (const session of sessions) {
     all.push(await runSoftmax(session, tensor));
   }
+
+  // 모델별 argmax를 투표하지 않고 확률을 평균해 confidence와 UI 표시값을 함께 유지한다.
   const length = all[0].length;
   const avg = new Array(length).fill(0);
   for (const probs of all) {
