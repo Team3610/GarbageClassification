@@ -19,10 +19,17 @@ if str(PROJECT_ROOT) not in sys.path:
 from AI.train.utils import resolve_device, seed_everything
 
 
+# // Stage 1 모델은 전체 쓰레기 분류 파이프라인의 입구 필터로서, 입력 이미지가 쓰레기 배출 대상인지(Garbage) 또는 일반 풍경이나 인물 등 비대상 이미지(NonGarbage)인지 이진 판별하는 이진 분류용 클래스 정의입니다.
 STAGE1_CLASS_NAMES = ("NonGarbage", "Garbage")
 
 
 def import_training_dependencies() -> None:
+    """
+    /**
+     * Matplotlib 캐시 디렉토리 설정 및 학습에 동적으로 필요한 PyTorch 등의 무거운 패키지들을 지연 임포트합니다.
+     * @returns {None}
+     */
+    """
     global DataLoader
     global GarbageStage1Dataset
     global Subset
@@ -67,6 +74,12 @@ def import_training_dependencies() -> None:
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    /**
+     * CLI 인자를 파싱합니다.
+     * @returns {argparse.Namespace} 파싱된 명령행 인수 객체
+     */
+    """
     parser = argparse.ArgumentParser(
         description="Train a lightweight binary classifier for Stage 1 (garbage vs non-garbage)."
     )
@@ -117,6 +130,12 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """
+    /**
+     * Stage 1 이진 분류 모델 학습 파이프라인을 구동하고 평가 메트릭을 저장하는 엔트리포인트 함수입니다.
+     * @returns {None}
+     */
+    """
     args = parse_args()
     import_training_dependencies()
     seed_everything(args.seed)

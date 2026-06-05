@@ -13,6 +13,7 @@ import {
 
 import { HierarchicalClassifier, SigmoidClassifier } from './inference/classifier.js';
 import { MODEL_PRESETS } from './inference/config.js';
+import { Result3DViewer } from './components/Result3DViewer.jsx';
 
 const categories = [
   {
@@ -104,6 +105,8 @@ function App() {
 
   const preset = MODEL_PRESETS[presetKey];
 
+  // 모델 프리셋이 바뀌면 기존 session을 버리고 새 ONNX session을 준비한다.
+  // 비동기 로드가 늦게 끝나도 이전 프리셋 결과가 현재 화면 상태를 덮어쓰지 않도록 cancelled로 보호한다.
   useEffect(() => {
     let cancelled = false;
     const total = (preset.type === 'sigmoid') ? 1 : 1 + preset.stage2.length;
@@ -126,6 +129,7 @@ function App() {
         classifierRef.current = classifier;
         setModelStatus({ state: 'ready', loaded: total, total });
         if (lastFileRef.current) {
+          // 모델만 교체한 경우 사용자가 이미 올린 파일을 새 프리셋으로 즉시 다시 평가한다.
           runPrediction(lastFileRef.current, classifier);
         }
       })
@@ -141,22 +145,32 @@ function App() {
     };
   }, [presetKey]);
 
+  // threshold 기본값은 모델 프리셋마다 다를 수 있으므로 프리셋 변경과 함께 동기화한다.
   useEffect(() => {
     setGarbageThreshold(preset.garbageThreshold);
   }, [presetKey]);
 
+  // threshold 조정은 모델 재로드가 아니라 같은 파일에 대한 판정 기준만 바꾸는 작업이다.
   useEffect(() => {
     if (classifierRef.current && lastFileRef.current) {
       runPrediction(lastFileRef.current, classifierRef.current);
     }
   }, [garbageThreshold]);
 
+  // 업로드 미리보기 URL은 브라우저 메모리를 잡고 있으므로 교체/언마운트 시 해제한다.
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
 
+  /**
+   * 현재 로드된 classifier로 파일을 추론하고 UI 표시용 결과 상태를 갱신한다.
+   *
+   * @param {File} file 사용자가 업로드한 이미지 파일
+   * @param {HierarchicalClassifier | SigmoidClassifier} classifier 로드 완료된 브라우저 추론기
+   * @returns {Promise<void>}
+   */
   async function runPrediction(file, classifier) {
     setIsPredicting(true);
     setPredictionError(null);
@@ -173,6 +187,12 @@ function App() {
     }
   }
 
+  /**
+   * 파일 선택과 드래그 업로드가 공유하는 진입점이다.
+   *
+   * @param {File | undefined} file 업로드 후보 파일
+   * @returns {void}
+   */
   function selectFile(file) {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -183,6 +203,7 @@ function App() {
     setPreviewUrl(URL.createObjectURL(file));
     setPrediction(null);
     setPredictionError(null);
+    // 모델 스왑이나 threshold 변경 후 재추론할 수 있도록 File 객체를 state 대신 ref에 둔다.
     lastFileRef.current = file;
 
     if (classifierRef.current) {
@@ -278,8 +299,11 @@ function App() {
               <Leaf size={16} />
               Client-side waste sorting assistant
             </p>
-            <h2 className="max-w-3xl text-4xl font-black leading-tight tracking-normal text-[#101816] sm:text-5xl lg:text-6xl">
-              사진 한 장으로 분리수거 방향을 빠르게 확인하세요.
+            <h2 className="hero-title font-black text-[#101816]">
+              <span className="hero-title-line">사진 한 장으로</span>
+              <span className="hero-title-line">
+                분리수거 방향을 <span className="hero-title-tail">확인하세요.</span>
+              </span>
             </h2>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[#53615c] sm:text-lg">
               브라우저 내 ONNX Runtime Web으로 직접 추론합니다. 이미지를 업로드하면 선택한 분류 모델(2단계 Hierarchical 파이프라인, 11클래스 통합 모델 또는 시그모이드 모델)을 거쳐 최적의 결과를 제공합니다.
@@ -472,20 +496,23 @@ function App() {
 
           <div className="rounded-[32px] border border-[#d9e2dc] bg-[#172522] p-5 text-white shadow-[0_24px_70px_rgba(30,45,40,0.16)]">
             <div className="mb-5">
-              <p className="text-sm font-semibold text-[#9ed7bd]">향후 Spline 적용 위치</p>
-              <h3 className="mt-1 text-2xl font-black">분류 결과 3D 뷰어</h3>
+              <p className="text-sm font-semibold text-[#9ed7bd]">분류 결과 3D 뷰어</p>
+              <h3 className="mt-1 text-2xl font-black">분류 결과 3D 미리보기</h3>
               <p className="mt-3 text-sm leading-6 text-white/72">
-                Spline은 배경 장식이 아니라, 업로드 이미지가 분류된 뒤 결과물을 회전하며 확인하는 전용 뷰어에 연결할 예정입니다.
+                분류된 카테고리를 대표하는 3D 모델을 회전하고 확대해 확인할 수 있습니다.
               </p>
             </div>
 
-            <div className="flex aspect-[4/3] items-center justify-center rounded-[24px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))] p-6">
-              <div className="text-center">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/12 text-[#a8e0c6]">
-                  <ScanSearch size={28} />
-                </div>
-                <p className="mt-4 text-base font-bold">3D preview reserved</p>
-                <p className="mt-2 text-sm leading-6 text-white/64">분석 결과가 생기기 전에는 Spline scene을 로드하지 않습니다.</p>
+            <Result3DViewer prediction={prediction} />
+            <div className="mt-4 flex items-start gap-3 rounded-2xl bg-white/8 p-4 ring-1 ring-white/10">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-[#a8e0c6]">
+                <ScanSearch size={18} />
+              </div>
+              <div>
+                <p className="text-sm font-bold">현재는 자체 생성 GLB 예시 모델입니다.</p>
+                <p className="mt-1 text-sm leading-6 text-white/64">
+                  더 정교한 GLB/OBJ 에셋을 준비하면 이 컴포넌트에서 클래스별 모델 파일만 교체할 수 있습니다.
+                </p>
               </div>
             </div>
           </div>
