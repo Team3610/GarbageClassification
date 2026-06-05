@@ -105,6 +105,8 @@ function App() {
 
   const preset = MODEL_PRESETS[presetKey];
 
+  // 모델 프리셋이 바뀌면 기존 session을 버리고 새 ONNX session을 준비한다.
+  // 비동기 로드가 늦게 끝나도 이전 프리셋 결과가 현재 화면 상태를 덮어쓰지 않도록 cancelled로 보호한다.
   useEffect(() => {
     let cancelled = false;
     const total = (preset.type === 'sigmoid') ? 1 : 1 + preset.stage2.length;
@@ -127,6 +129,7 @@ function App() {
         classifierRef.current = classifier;
         setModelStatus({ state: 'ready', loaded: total, total });
         if (lastFileRef.current) {
+          // 모델만 교체한 경우 사용자가 이미 올린 파일을 새 프리셋으로 즉시 다시 평가한다.
           runPrediction(lastFileRef.current, classifier);
         }
       })
@@ -142,22 +145,32 @@ function App() {
     };
   }, [presetKey]);
 
+  // threshold 기본값은 모델 프리셋마다 다를 수 있으므로 프리셋 변경과 함께 동기화한다.
   useEffect(() => {
     setGarbageThreshold(preset.garbageThreshold);
   }, [presetKey]);
 
+  // threshold 조정은 모델 재로드가 아니라 같은 파일에 대한 판정 기준만 바꾸는 작업이다.
   useEffect(() => {
     if (classifierRef.current && lastFileRef.current) {
       runPrediction(lastFileRef.current, classifierRef.current);
     }
   }, [garbageThreshold]);
 
+  // 업로드 미리보기 URL은 브라우저 메모리를 잡고 있으므로 교체/언마운트 시 해제한다.
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
 
+  /**
+   * 현재 로드된 classifier로 파일을 추론하고 UI 표시용 결과 상태를 갱신한다.
+   *
+   * @param {File} file 사용자가 업로드한 이미지 파일
+   * @param {HierarchicalClassifier | SigmoidClassifier} classifier 로드 완료된 브라우저 추론기
+   * @returns {Promise<void>}
+   */
   async function runPrediction(file, classifier) {
     setIsPredicting(true);
     setPredictionError(null);
@@ -174,6 +187,12 @@ function App() {
     }
   }
 
+  /**
+   * 파일 선택과 드래그 업로드가 공유하는 진입점이다.
+   *
+   * @param {File | undefined} file 업로드 후보 파일
+   * @returns {void}
+   */
   function selectFile(file) {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -184,6 +203,7 @@ function App() {
     setPreviewUrl(URL.createObjectURL(file));
     setPrediction(null);
     setPredictionError(null);
+    // 모델 스왑이나 threshold 변경 후 재추론할 수 있도록 File 객체를 state 대신 ref에 둔다.
     lastFileRef.current = file;
 
     if (classifierRef.current) {
