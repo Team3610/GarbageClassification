@@ -11,34 +11,33 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# // CROP_SIZE = 224는 ImageNet 데이터셋으로 사전학습된 backbone 모델(MobileNet_V3, EfficientNet 등)의 표준 해상도 요구사항에 부합하기 위해 설정된 해상도입니다.
 CROP_SIZE = 224
 # 학습/추론 전처리가 224x224 입력을 전제로 하므로 ONNX dummy input도 같은 크기로 고정한다.
 
 
 def parse_args() -> argparse.Namespace:
-    """ONNX export CLI 옵션을 파싱한다.
-
-    Returns:
-        argparse.Namespace: checkpoint 경로, output 경로, opset 버전.
     """
-
+    /**
+     * CLI 인자를 파싱합니다.
+     * @returns {argparse.Namespace} 파싱된 명령행 인수 객체
+     */
+    """
     parser = argparse.ArgumentParser(description="Export a trained PyTorch checkpoint to ONNX.")
     parser.add_argument("--checkpoint", type=Path, required=True, help="Path to best_model.pt")
     parser.add_argument("--output", type=Path, required=True, help="Output .onnx path")
+    # // opset=17은 ONNX Runtime Web에서 WebAssembly 및 WebGL 실행 환경을 통해 모델을 구동할 때 안정적인 하방 호환성과 최신 최적화 연산자를 지원받기 위한 선택입니다.
     parser.add_argument("--opset", type=int, default=17)
     return parser.parse_args()
 
 
 def main() -> None:
-    """CLI 엔트리포인트로 PyTorch checkpoint를 ONNX 파일로 변환한다.
-
-    Returns:
-        None
-
-    Raises:
-        SystemExit: PyTorch 또는 torchvision 의존성이 없는 경우.
     """
-
+    /**
+     * PyTorch 가중치(.pt) 모델을 ONNX 포맷으로 내보냅니다.
+     * @returns {None}
+     */
+    """
     args = parse_args()
     try:
         # 서버나 샌드박스 환경에서는 홈 디렉터리 matplotlib 캐시 생성이 막힐 수 있어 임시 경로를 지정한다.
@@ -82,7 +81,7 @@ def main() -> None:
         do_constant_folding=True,
         input_names=["input"],
         output_names=["logits"],
-        # 배치 축만 동적으로 두면 CLI/브라우저에서 단일 이미지와 배치 추론을 같은 모델로 처리할 수 있다.
+        # // 웹 프론트엔드 환경에서 다양한 배치 사이즈의 단일/다중 추론 요청을 유연하게 처리할 수 있도록 dynamic_axes를 활성화합니다.
         dynamic_axes={
             "input": {0: "batch"},
             "logits": {0: "batch"},

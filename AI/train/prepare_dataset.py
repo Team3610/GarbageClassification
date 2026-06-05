@@ -5,6 +5,7 @@ from pathlib import Path
 
 # Google Drive 공유 파일 ID는 바뀔 수 있으므로 Dataset/README의 데이터셋 출처와 함께 관리한다.
 
+# // 팀 내에서 공유/배포 및 공통 관리를 용이하게 하기 위해 구글 드라이브에 미리 패키징하여 업로드해 둔 데이터셋 압축파일(dataset.zip)의 공유용 고유 파일 식별자 ID입니다.
 DATASET_FILE_ID = "1L8TpC9F72u0hcoA-kqcD3gvvgZNQvrPn"
 EXPECTED_CLASS_DIRS = (
     "battery",
@@ -21,12 +22,12 @@ EXPECTED_CLASS_DIRS = (
 
 
 def parse_args() -> argparse.Namespace:
-    """데이터셋 다운로드/압축 해제 CLI 옵션을 파싱한다.
-
-    Returns:
-        argparse.Namespace: dataset_dir, zip_path, skip_download, force 옵션.
     """
-
+    /**
+     * CLI 인자를 파싱합니다.
+     * @returns {argparse.Namespace} 파싱된 명령행 인수 객체
+     */
+    """
     parser = argparse.ArgumentParser(
         description="Download and extract the garbage classification dataset."
     )
@@ -56,19 +57,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def download_from_google_drive(file_id: str, output_path: Path) -> None:
-    """수동 다운로드와 자동 다운로드를 같은 zip 경로 규칙으로 맞춰 후속 압축 해제를 단순화한다.
-
-    Args:
-        file_id (str): Google Drive 공유 파일 ID.
-        output_path (Path): 다운로드한 zip 파일을 저장할 경로.
-
-    Returns:
-        None
-
-    Raises:
-        SystemExit: gdown이 설치되어 있지 않은 경우.
     """
-
+    /**
+     * 구글 드라이브로부터 대용량 파일 식별자 ID를 이용해 데이터셋 압축파일을 다운로드합니다.
+     * @param {str} file_id - 구글 드라이브 파일 ID
+     * @param {Path} output_path - 저장할 로컬 파일 경로
+     * @returns {None}
+     */
+    """
     try:
         import gdown
     except ImportError as exc:
@@ -84,15 +80,13 @@ def download_from_google_drive(file_id: str, output_path: Path) -> None:
 
 
 def clear_existing_class_dirs(dataset_dir: Path) -> None:
-    """--force 실행 시 zip 안의 클래스 폴더만 지워 로컬 메모나 zip 파일은 보존한다.
-
-    Args:
-        dataset_dir (Path): Dataset 루트 경로.
-
-    Returns:
-        None
     """
-
+    /**
+     * 추출 전 충돌 방지를 위해 기존에 존재하던 클래스 디렉토리들을 완전히 비웁니다.
+     * @param {Path} dataset_dir - 데이터셋 디렉토리 경로
+     * @returns {None}
+     */
+    """
     for class_dir in EXPECTED_CLASS_DIRS:
         path = dataset_dir / class_dir
         if path.exists():
@@ -101,19 +95,14 @@ def clear_existing_class_dirs(dataset_dir: Path) -> None:
 
 
 def extract_zip(zip_path: Path, dataset_dir: Path) -> None:
-    """데이터셋 zip 파일을 Dataset 루트에 압축 해제한다.
-
-    Args:
-        zip_path (Path): 압축 해제할 zip 파일 경로.
-        dataset_dir (Path): 압축을 풀 대상 Dataset 루트 경로.
-
-    Returns:
-        None
-
-    Raises:
-        FileNotFoundError: zip_path에 파일이 없는 경우.
     """
-
+    /**
+     * 다운로드 혹은 준비된 zip 압축 파일을 대상 디렉토리에 풉니다.
+     * @param {Path} zip_path - 압축 파일 경로
+     * @param {Path} dataset_dir - 압축을 해제할 디렉토리 경로
+     * @returns {None}
+     */
+    """
     if not zip_path.is_file():
         raise FileNotFoundError(f"Dataset zip file not found: {zip_path}")
 
@@ -125,15 +114,13 @@ def extract_zip(zip_path: Path, dataset_dir: Path) -> None:
 
 
 def find_missing_class_dirs(dataset_dir: Path) -> list[str]:
-    """학습 코드가 기대하는 10개 폴더가 모두 준비됐는지 빠르게 검증한다.
-
-    Args:
-        dataset_dir (Path): Dataset 루트 경로.
-
-    Returns:
-        list[str]: 존재하지 않는 필수 클래스 폴더명 목록.
     """
-
+    /**
+     * 압축 해제 후 요구되는 필수 클래스 디렉토리 중 누락된 곳이 있는지 탐색합니다.
+     * @param {Path} dataset_dir - 데이터셋 디렉토리 경로
+     * @returns {list[str]} 누락된 클래스 디렉토리명 리스트
+     */
+    """
     return [
         class_dir
         for class_dir in EXPECTED_CLASS_DIRS
@@ -142,12 +129,12 @@ def find_missing_class_dirs(dataset_dir: Path) -> list[str]:
 
 
 def main() -> None:
-    """CLI 엔트리포인트로 데이터셋 다운로드, 압축 해제, 폴더 검증을 수행한다.
-
-    Returns:
-        None
     """
-
+    /**
+     * 데이터셋 준비 전 과정을 제어하는 진입 함수입니다.
+     * @returns {None}
+     */
+    """
     args = parse_args()
 
     if args.force:
