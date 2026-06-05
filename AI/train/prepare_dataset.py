@@ -3,7 +3,7 @@ import shutil
 import zipfile
 from pathlib import Path
 
-# 데이터셋 자동 다운로드 - Dataset/README.md 참고
+# Google Drive 공유 파일 ID는 바뀔 수 있으므로 Dataset/README의 데이터셋 출처와 함께 관리한다.
 
 # // 팀 내에서 공유/배포 및 공통 관리를 용이하게 하기 위해 구글 드라이브에 미리 패키징하여 업로드해 둔 데이터셋 압축파일(dataset.zip)의 공유용 고유 파일 식별자 ID입니다.
 DATASET_FILE_ID = "1L8TpC9F72u0hcoA-kqcD3gvvgZNQvrPn"
@@ -90,6 +90,7 @@ def clear_existing_class_dirs(dataset_dir: Path) -> None:
     for class_dir in EXPECTED_CLASS_DIRS:
         path = dataset_dir / class_dir
         if path.exists():
+            # Dataset/ 전체를 지우지 않는 이유는 dataset.zip이나 README 같은 보조 파일을 유지하기 위해서다.
             shutil.rmtree(path)
 
 
@@ -106,6 +107,8 @@ def extract_zip(zip_path: Path, dataset_dir: Path) -> None:
         raise FileNotFoundError(f"Dataset zip file not found: {zip_path}")
 
     dataset_dir.mkdir(parents=True, exist_ok=True)
+    # zip 내부 폴더 구조가 Dataset/<class_name>/... 형태라는 전제에서 바로 풀어낸다.
+    # 구조가 바뀌면 아래 find_missing_class_dirs 검증에서 실패하게 둔다.
     with zipfile.ZipFile(zip_path) as archive:
         archive.extractall(dataset_dir)
 

@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 # // CROP_SIZE = 224는 ImageNet 데이터셋으로 사전학습된 backbone 모델(MobileNet_V3, EfficientNet 등)의 표준 해상도 요구사항에 부합하기 위해 설정된 해상도입니다.
 CROP_SIZE = 224
+# 학습/추론 전처리가 224x224 입력을 전제로 하므로 ONNX dummy input도 같은 크기로 고정한다.
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,6 +40,7 @@ def main() -> None:
     """
     args = parse_args()
     try:
+        # 서버나 샌드박스 환경에서는 홈 디렉터리 matplotlib 캐시 생성이 막힐 수 있어 임시 경로를 지정한다.
         matplotlib_cache_dir = Path(tempfile.gettempdir()) / "matplotlib-cache"
         matplotlib_cache_dir.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("MPLCONFIGDIR", str(matplotlib_cache_dir))
@@ -55,6 +57,8 @@ def main() -> None:
     model_name = checkpoint["model_name"]
     class_names = tuple(checkpoint["class_names"])
 
+    # checkpoint에 저장된 모델명과 클래스 수를 기준으로 구조를 복원해야 classifier head 크기가 맞는다.
+    # 학습 때 사용한 class_names 순서는 ONNX 추론의 출력 index 해석에도 그대로 사용된다.
     model = build_model(
         model_name=model_name,
         num_classes=len(class_names),
@@ -66,6 +70,8 @@ def main() -> None:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     dummy_input = torch.randn(1, 3, CROP_SIZE, CROP_SIZE)
+    # dummy_input은 실제 값을 쓰지 않고 shape 추적에만 사용된다.
+    # batch=1로 export하되 dynamic_axes를 지정해 런타임에서는 여러 장도 한 번에 넣을 수 있다.
     torch.onnx.export(
         model,
         dummy_input,

@@ -15,6 +15,36 @@ body {
   margin: 0;
 }
 
+.hero-title {
+  max-width: min(100%, 13.5ch);
+  font-size: clamp(2.35rem, 5.6vw, 4.65rem);
+  line-height: 1.13;
+  letter-spacing: 0;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-wrap: balance;
+}
+
+.hero-title-line {
+  display: block;
+}
+
+.hero-title-tail {
+  display: inline-block;
+}
+
+@media (max-width: 520px) {
+  .hero-title {
+    max-width: 10ch;
+    font-size: clamp(2.1rem, 11vw, 3rem);
+    line-height: 1.18;
+  }
+
+  .hero-title-tail {
+    display: block;
+  }
+}
+
 button,
 input,
 textarea,

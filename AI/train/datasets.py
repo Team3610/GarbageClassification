@@ -19,6 +19,8 @@ GARBAGE_CLASSES: tuple[str, ...] = (
     "Trash",
 )
 
+# 이 tuple의 순서가 Stage 2 학습 label index와 추론 label index의 기준이다.
+# 새 클래스를 추가하거나 순서를 바꾸면 기존 checkpoint/ONNX 모델의 출력 해석도 함께 바뀐다.
 CLASS_TO_IDX: dict[str, int] = {
     class_name: index for index, class_name in enumerate(GARBAGE_CLASSES)
 }
@@ -28,6 +30,7 @@ IDX_TO_CLASS: dict[int, str] = {
 FOLDER_TO_CLASS: dict[str, str] = {
     class_name.lower(): class_name for class_name in GARBAGE_CLASSES
 }
+# 폴더명은 소문자, 모델 출력 라벨은 대문자 시작 표기를 사용하므로 한 곳에서만 변환한다.
 IMAGE_EXTENSIONS: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 # // 학습 기여도를 높이기 위해 사용자가 폴더명을 non_garbage, not_garbage, non_waste 등으로 지정하여 수집한 비쓰레기 데이터를 모두 식별할 수 있도록 다중 폴더명을 허용합니다.
 DEFAULT_NON_GARBAGE_DIRS: tuple[str, ...] = (
@@ -99,6 +102,7 @@ class GarbageDataset(Dataset):
          */
         """
         image_path, label = self.samples[index]
+        # 모든 입력을 RGB 3채널로 고정해 grayscale/alpha 채널 이미지가 섞여도 transform shape가 일정하게 유지된다.
         image = Image.open(image_path).convert("RGB")
 
         if self.transform is not None:
@@ -141,14 +145,19 @@ class GarbageDataset(Dataset):
         samples: list[tuple[Path, int]] = []
 
         for folder_name, class_name in FOLDER_TO_CLASS.items():
+            # Stage 1은 10개 쓰레기 폴더를 하나의 양성 라벨로 묶고, Stage 2는 클래스 index를 유지한다.
+            # 같은 폴더 구조를 두 학습 문제에 재사용하기 위한 분기라서 mode별 라벨 의미가 다르다.
             label = 1 if self.mode == "stage1" else CLASS_TO_IDX[class_name]
             samples.extend(self._collect_images(self.root_dir / folder_name, label))
 
         if self.mode in {"stage1", "sigmoid"}:
+            # sigmoid 모드의 10은 __getitem__에서 all-zero vector로 바꾸기 위한 내부 sentinel이다.
+            # 실제 모델 출력 클래스는 0~9뿐이므로 이 값이 그대로 loss에 들어가면 안 된다.
             non_garbage_label = 0 if self.mode == "stage1" else 10
             for folder_name in non_garbage_dirs:
                 samples.extend(self._collect_images(self.root_dir / folder_name, non_garbage_label))
 
+        # 파일 시스템 순서 차이로 train/validation split이 흔들리지 않도록 정렬된 목록을 반환한다.
         return sorted(samples, key=lambda sample: str(sample[0]))
 
     def _collect_images(self, directory: Path, label: int) -> list[tuple[Path, int]]:

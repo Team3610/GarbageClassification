@@ -41,8 +41,15 @@ const modelPaths = {
   Trash: '/models/3d/Trash.glb',
 };
 
+// 결과가 나온 뒤 모델 로딩 지연으로 화면이 비는 시간을 줄이기 위해 대표 GLB를 미리 요청한다.
 Object.values(modelPaths).forEach((path) => useGLTF.preload(path));
 
+/**
+ * 분류 결과 클래스에 맞는 대표 3D 모델을 보여준다.
+ *
+ * @param {{ prediction: { isGarbage: boolean, label?: string } | null }} props
+ * @returns {JSX.Element}
+ */
 export function Result3DViewer({ prediction }) {
   const resultLabel = prediction?.isGarbage ? prediction.label : null;
   const previewLabel = resultLabel ?? (prediction ? null : 'Plastic');
