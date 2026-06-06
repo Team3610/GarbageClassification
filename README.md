@@ -6,7 +6,7 @@
 
 쓰레기 사진을 업로드하면 브라우저에서 직접 동작하는 ONNX 모델 추론으로 **재활용 카테고리**를 알려줍니다. 별도의 백엔드 서버 없이 전 과정이 클라이언트에서 완결되며, 이미지가 외부로 전송되지 않아 프라이버시 보호도 함께 보장합니다.
 
-배포 데모: https://garbage-classification-giy0m5ukj-jaehyun03.vercel.app/
+배포 데모: https://garbage-classification-sandy.vercel.app/
 
 ---
 
