@@ -190,3 +190,11 @@ python AI/export/export_checkpoint_to_onnx.py
 | 권시헌 | 데이터 전처리     |
 | 김건민 | 모델 학습         |
 | 김민성 | 웹 페이지 개발    |
+
+---
+
+## 📄 라이선스 (License)
+
+본 프로젝트는 **MIT License** 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참고하세요.
+또한 본 프로젝트에서 활용 중인 일부 외부 라이브러리 및 데이터셋(COCO, TACO 등)은 각 저작권자의 고유 라이선스(BSD, Apache 2.0, CC BY 4.0 등) 규정을 따릅니다.
+
